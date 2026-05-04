@@ -74,3 +74,14 @@ This system:
 - supports multiple layouts per source
 - uses effective dates to apply the correct schema
 - avoids breaking existing pipelines
+
+---
+
+# 📚 Documentation
+
+Detailed setup, architecture, and usage instructions are available in the project Wiki (ready 5/12/26)
+
+👉 [Project Wiki](../../wiki)
+
+---
+
