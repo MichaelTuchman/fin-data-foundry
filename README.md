@@ -86,6 +86,17 @@ This system:
 - avoids breaking existing pipelines
 
 ---
+## 🔮 Future Directions
+
+This framework focuses on standardizing raw financial transaction data.
+
+A natural extension is higher-level interpretation, such as:
+
+- merchant identification
+- transaction categorization
+- enrichment of normalized data
+
+Early prototypes of these capabilities exist, but are not yet part of this repository.
 
 # 📚 Documentation
 
