@@ -14,6 +14,8 @@ The name *foundry* is intentional:
 
 This system applies the same idea to financial data—casting heterogeneous inputs into a single, queryable transaction dataset.
 
+It enables normalization of bank CSV data, standardization of financial transactions, and metadata-driven ingestion using SQL and AWS Athena.
+
 # 🧩 Use Cases
 
 This project is designed for anyone dealing with inconsistent financial data across multiple sources.  Even within the same bank, formats often change over time.
