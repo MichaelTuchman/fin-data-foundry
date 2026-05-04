@@ -16,6 +16,8 @@ This system applies the same idea to financial data—casting heterogeneous inpu
 
 It enables normalization of bank CSV data, standardization of financial transactions, and metadata-driven ingestion using SQL and AWS Athena.
 
+This approach moves beyond traditional data pipelines. By using metadata to define structure, the system acts as an early form of **assisted data modeling**—helping transform inconsistent inputs into a consistent, queryable schema with minimal manual effort.
+
 ---
 
 ## ⚠️ Current Implementation
