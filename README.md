@@ -1,34 +1,22 @@
 # fin-data-foundry
-Metadata-driven pipeline for ingesting and normalizing multi-bank  financial CSV data into a unified transaction model. 
 
+Metadata-driven framework for **normalizing inconsistent bank CSV data into a unified transaction model**.
 
-## Overview
+Most banks export transaction data differently—and often change formats over time.  
+As a result, combining or analyzing data across accounts becomes manual, fragile, and time-consuming.
 
-**fin-data-foundry** is a metadata-driven framework for transforming raw financial data into a standardized, queryable transaction model.
+**fin-data-foundry** solves this by separating *data ingestion* from *data interpretation*.  
+Raw CSV files are ingested as-is, and metadata defines how each format should be transformed into a standardized schema.
 
 The name *foundry* is intentional:
 
-> A foundry takes raw, unrefined material and transforms it into consistent, usable forms.
+> A foundry transforms raw, unrefined material into consistent, usable forms.
 
-This system applies the same idea to financial data:
-
-- Raw bank CSV exports are treated as unrefined input
-- Metadata defines how that data should be shaped
-- The output is a uniform, structured transaction dataset
-
-Rather than building separate pipelines for each bank or file format, the system uses metadata to “cast” heterogeneous inputs into a single, consistent schema.
-
-This approach enables:
-
-- ingestion of new data without code changes  
-- support for multiple banks and evolving formats  
-- a clean separation between raw data and its interpretation  
-
-In short, this repository is not just an ingestion pipeline—it is a **data foundry** for financial transactions.
+This system applies the same idea to financial data—casting heterogeneous inputs into a single, queryable transaction dataset.
 
 # 🧩 Use Cases
 
-This project is designed for anyone dealing with inconsistent financial data across multiple sources.  Moreover, we often have to deal with inconsistent data from the *same* source!
+This project is designed for anyone dealing with inconsistent financial data across multiple sources.  Even within the same bank, formats often change over time.
 
 ## 🏦 Personal Finance Aggregation
 
