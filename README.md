@@ -16,6 +16,16 @@ This system applies the same idea to financial data—casting heterogeneous inpu
 
 It enables normalization of bank CSV data, standardization of financial transactions, and metadata-driven ingestion using SQL and AWS Athena.
 
+---
+
+## ⚠️ Current Implementation
+
+The reference implementation in this repository is developed and tested on AWS (S3 + Athena).
+
+The overall approach is platform-agnostic and can be adapted to other environments (e.g., Azure, GCP, or local SQL engines), but those implementations are not yet provided.
+
+---
+
 # 🧩 Use Cases
 
 This project is designed for anyone dealing with inconsistent financial data across multiple sources.  Even within the same bank, formats often change over time.
