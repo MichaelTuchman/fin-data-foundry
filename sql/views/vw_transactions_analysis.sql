@@ -42,15 +42,12 @@ SELECT
     ) AS description,
 
     CAST(
-        regexp_replace(
             MAX(
                 CASE
                     WHEN cl.canonical_field = 'amount'
                     THEN cl.raw_value
                 END
-            ),
-            '[$,]',
-            ''
+            )
         ) AS decimal(12,2)
     ) AS amount
 
@@ -72,3 +69,4 @@ GROUP BY
     cl.file_end_yyyymm,
     cl.source_row_number,
     cl.layout_id;
+
