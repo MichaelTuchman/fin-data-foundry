@@ -106,5 +106,8 @@ Detailed setup, architecture, and usage instructions are available in the projec
 
 👉 [Project Wiki](../../wiki)
 
+Hardcoded S3 bucket names currently exist.
+This is known and accepted.
+
 ---
 
