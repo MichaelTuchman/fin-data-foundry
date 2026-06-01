@@ -63,3 +63,4 @@ SELECT
     col06, col07, col08, col09, col10
 
 FROM parsed;
+
