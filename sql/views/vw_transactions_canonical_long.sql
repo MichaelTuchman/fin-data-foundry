@@ -60,3 +60,4 @@ mapped AS (
 
 SELECT *
 FROM mapped;
+

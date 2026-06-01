@@ -56,3 +56,4 @@ UNION ALL
 SELECT source_system, account_id, source_path, file_name, file_start_yyyymm, file_end_yyyymm, source_row_number, 9, col09 FROM numbered
 UNION ALL
 SELECT source_system, account_id, source_path, file_name, file_start_yyyymm, file_end_yyyymm, source_row_number, 10, col10 FROM numbered;
+
