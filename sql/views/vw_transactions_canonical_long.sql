@@ -1,0 +1,8 @@
+-- Input:
+--     vw_raw_transactions_long
+--     metadata_layouts
+--     metadata_layout_cols
+-- 
+-- Output:
+--     canonical_field
+--     raw_value

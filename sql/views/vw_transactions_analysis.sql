@@ -1,0 +1,5 @@
+-- this is the final cross-bank analy sis dataset
+-- transaction_date
+-- description
+-- amount
+-- account metadata

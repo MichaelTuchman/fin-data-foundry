@@ -1,0 +1,10 @@
+-- Input:
+--     vw_raw_csv_file_context
+-- 
+-- Output:
+--     source_system
+--     account_id
+--     source_path
+--     source_row_number
+--     column_position
+--     raw_value
