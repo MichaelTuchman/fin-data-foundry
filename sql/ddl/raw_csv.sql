@@ -1,8 +1,4 @@
-
-
 CREATE EXTERNAL TABLE raw_csv (
-    source_line_number INT,
-
     col01 STRING,
     col02 STRING,
     col03 STRING,
@@ -21,4 +17,3 @@ WITH SERDEPROPERTIES (
 )
 STORED AS TEXTFILE
 LOCATION 's3://mftfinances/raw/';
-
