@@ -1,0 +1,3 @@
+source_system,account_id,account_label,account_type,institution
+wf,joint_checking,Wells Fargo Checking,checking,Wells Fargo
+bhg,bhg_mc,BHG Mastercard,credit_card,BHG
