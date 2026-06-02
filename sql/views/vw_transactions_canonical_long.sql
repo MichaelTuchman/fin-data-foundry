@@ -56,8 +56,57 @@ mapped AS (
       ON rl.source_system = lc.source_system
      AND rl.layout_id = lc.layout_id
      AND r.column_position = lc.column_position
+),
+
+valid_source_rows AS (
+    SELECT
+        source_system,
+        account_id,
+        source_path,
+        source_row_number,
+        layout_id
+    FROM mapped
+    GROUP BY
+        source_system,
+        account_id,
+        source_path,
+        source_row_number,
+        layout_id
+    HAVING SUM(
+        CASE
+            WHEN required = TRUE
+             AND (
+                    raw_value IS NULL
+                 OR regexp_like(raw_value, expected_pattern) = FALSE
+                 )
+            THEN 1
+            ELSE 0
+        END
+    ) = 0
 )
 
-SELECT *
-FROM mapped;
+SELECT
+    m.source_system,
+    m.account_id,
+    m.source_path,
+    m.file_name,
+    m.file_start_yyyymm,
+    m.file_end_yyyymm,
+    m.source_row_number,
+    m.layout_id,
+
+    m.column_position,
+    m.canonical_field,
+    m.expected_pattern,
+    m.required,
+    m.raw_value
+
+FROM mapped m
+
+INNER JOIN valid_source_rows v
+  ON m.source_system = v.source_system
+ AND m.account_id = v.account_id
+ AND m.source_path = v.source_path
+ AND m.source_row_number = v.source_row_number
+ AND m.layout_id = v.layout_id;
 

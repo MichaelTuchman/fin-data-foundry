@@ -41,14 +41,12 @@ SELECT
         END
     ) AS description,
 
-    CAST(
-            MAX(
+    MAX(
                 CASE
                     WHEN cl.canonical_field = 'amount'
                     THEN cl.raw_value
                 END
             )
-        ) AS decimal(12,2)
     ) AS amount
 
 FROM vw_transactions_canonical_long cl
