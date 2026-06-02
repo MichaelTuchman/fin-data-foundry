@@ -40,11 +40,10 @@ mapped AS (
         rl.file_end_yyyymm,
         rl.source_row_number,
         rl.layout_id,
-
         r.column_position,
         lc.canonical_field,
         lc.expected_pattern,
-        lc.required,
+        lower(trim(lc.required))='true' as required,
         r.raw_value
     FROM row_layouts rl
     INNER JOIN vw_raw_transactions_long r
@@ -109,4 +108,5 @@ INNER JOIN valid_source_rows v
  AND m.source_path = v.source_path
  AND m.source_row_number = v.source_row_number
  AND m.layout_id = v.layout_id;
+
 
