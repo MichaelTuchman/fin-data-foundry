@@ -1,3 +1,5 @@
-source_system,layout_id,effective_start_dt,effective_end_dt,header_rows,skip_rows
+source_system,layout_id,effective_start_dt,effective_end_dt,header_rows
 wf,LAYOUT_A,1900-01-01,2026-01-01,1,0
 wf,LAYOUT_B,2026-01-01,,1,0
+bhg,LAYOUT_A,1900-01-01,2026-01-01,1,0
+bhg,LAYOUT_B,2026-01-01,,1,0
