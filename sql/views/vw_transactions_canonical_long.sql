@@ -114,3 +114,4 @@ INNER JOIN valid_source_rows v
  AND m.source_path = v.source_path
  AND m.source_row_number = v.source_row_number
  AND m.layout_id = v.layout_id;
+
