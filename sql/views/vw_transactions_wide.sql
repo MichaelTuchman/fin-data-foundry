@@ -28,3 +28,4 @@ GROUP BY
     file_end_yyyymm,
     source_row_number,
     layout_id;
+
