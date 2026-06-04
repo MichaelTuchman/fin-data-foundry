@@ -1,67 +1,54 @@
-CREATE OR REPLACE VIEW vw_raw_csv_file_context AS
-WITH base AS (
-    SELECT
-        regexp_extract("$path", '/raw/([^/]+)/', 1) AS source_system,
-        regexp_extract("$path", '/raw/[^/]+/([^/]+)/', 1) AS account_id,
-        "$path" AS source_path,
-        regexp_extract("$path", '[^/]+$', 0) AS file_name,
+create or replace view vw_raw_csv_file_content as
+select
+    regexp_extract("$path", '.*/([^/]+)/[^/]+$', 1) as account_id,
+    regexp_extract("$path", '.*/([^/]+)/[^/]+/[^/]+$', 1) as source_system,
+    "$path" as source_path,
+    regexp_extract("$path", '.*/([^/]+)$', 1) as file_name,
 
-        col01, col02, col03, col04, col05,
-        col06, col07, col08, col09, col10
-    FROM raw_csv
-),
+    regexp_extract(regexp_extract("$path", '.*/([^/]+)$', 1), '([0-9]{6})', 1) as file_start_yyyymm,
+    regexp_extract(regexp_extract("$path", '.*/([^/]+)$', 1), '([0-9]{6})', 1) as file_end_yyyymm,
 
-parsed AS (
-    SELECT
-        *,
-        regexp_extract_all(file_name, '(20[0-9]{2})[_-]?([0-1][0-9])') AS month_tokens,
-        regexp_extract(file_name, '(20[0-9]{2})[_-]?[Qq]([1-4])', 1) AS quarter_year,
-        regexp_extract(file_name, '(20[0-9]{2})[_-]?[Qq]([1-4])', 2) AS quarter_num,
-        regexp_extract(file_name, '(20[0-9]{2})', 1) AS year_token
-    FROM base
-)
+    r.source_row_number,
 
-SELECT
-    source_system,
-    account_id,
-    source_path,
-    file_name,
+    a.account_label,
+    a.account_type,
+    a.institution,
 
-    CASE
-        WHEN cardinality(month_tokens) >= 1
-            THEN regexp_replace(month_tokens[1], '[_-]', '')
-        WHEN quarter_year <> ''
-            THEN quarter_year ||
-                 CASE quarter_num
-                     WHEN '1' THEN '01'
-                     WHEN '2' THEN '04'
-                     WHEN '3' THEN '07'
-                     WHEN '4' THEN '10'
-                 END
-        WHEN year_token <> ''
-            THEN year_token || '01'
-    END AS file_start_yyyymm,
+    r.col01,
+    r.col02,
+    r.col03,
+    r.col04,
+    r.col05,
+    r.col06,
+    r.col07,
+    r.col08,
+    r.col09,
+    r.col10
 
-    CASE
-        WHEN cardinality(month_tokens) >= 2
-            THEN regexp_replace(month_tokens[2], '[_-]', '')
-        WHEN cardinality(month_tokens) = 1
-            THEN regexp_replace(month_tokens[1], '[_-]', '')
-        WHEN quarter_year <> ''
-            THEN quarter_year ||
-                 CASE quarter_num
-                     WHEN '1' THEN '03'
-                     WHEN '2' THEN '06'
-                     WHEN '3' THEN '09'
-                     WHEN '4' THEN '12'
-                 END
-        WHEN year_token <> ''
-            THEN year_token || '12'
-    END AS file_end_yyyymm,
+from raw_csv r
+left join accounts a
+  on regexp_extract("$path", '.*/([^/]+)/[^/]+$', 1) = a.account_id
+ and regexp_extract("$path", '.*/([^/]+)/[^/]+/[^/]+$', 1) = a.source_system;
 
-    col01, col02, col03, col04, col05,
-    col06, col07, col08, col09, col10
-
-FROM parsed;
-
+-- Fields:
+-- source_system
+-- account_id
+-- source_path
+-- file_name
+-- file_start_yyyymm
+-- file_end_yyyymm
+-- source_row_number
+-- account_label
+-- account_type
+-- institution
+-- col01
+-- col02
+-- col03
+-- col04
+-- col05
+-- col06
+-- col07
+-- col08
+-- col09
+-- col10
 
