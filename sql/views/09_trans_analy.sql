@@ -10,7 +10,13 @@ SELECT
     derived_row_serial,
     transaction_date,
     description,
-    try_cast(amount AS decimal(18, 2)) AS amount,
+    amount,
+
+try_cast(
+    regexp_replace(amount, '[$,]', '')
+    AS decimal(18,2)
+) AS amount_d,
+
 COALESCE(
     try_cast(transaction_date AS date),
     CAST(try(date_parse(transaction_date, '%m/%d/%Y')) AS date)
