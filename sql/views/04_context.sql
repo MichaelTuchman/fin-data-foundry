@@ -14,7 +14,7 @@ SELECT
             CAST(date_parse(regexp_extract(source_file_path, '([0-9]{6})', 1), '%Y%m') AS date)
         )
     ) AS file_end_dt,
-    raw_row_serial,
+    derived_row_serial,
     col01,
     col02,
     col03,
