@@ -8,7 +8,7 @@ SELECT
     file_end_dt,
     layout_id,
     derived_row_serial,
-
+    transaction_date,
     try_cast(transaction_date AS date) AS transaction_dt,
     description,
     try_cast(amount AS decimal(18, 2)) AS amount,
