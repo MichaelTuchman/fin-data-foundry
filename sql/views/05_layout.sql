@@ -7,7 +7,7 @@ SELECT
     f.file_start_dt,
     f.file_end_dt,
     l.layout_id,
-    f.raw_row_serial,
+    f.derived_row_serial,
     f.col01,
     f.col02,
     f.col03,

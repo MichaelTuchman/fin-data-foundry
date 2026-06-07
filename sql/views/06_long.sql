@@ -7,7 +7,7 @@ SELECT
     l.file_start_dt,
     l.file_end_dt,
     l.layout_id,
-    l.raw_row_serial,
+    l.derived_row_serial,
     u.raw_col.column_position,
     c.canonical_field,
     u.raw_col.raw_value,
