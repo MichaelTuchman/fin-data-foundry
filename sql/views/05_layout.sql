@@ -22,4 +22,7 @@ FROM file_context f
 INNER JOIN metadata_layouts l
     ON f.source_system = l.source_system
    AND f.file_start_dt >= CAST(l.effective_start_dt AS date)
-   AND f.file_start_dt <= CAST(l.effective_end_dt AS date)
+   AND f.file_start_dt <= COALESCE(
+        try_cast(nullif(trim(l.effective_end_dt), '') AS date),
+        current_date
+    )
