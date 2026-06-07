@@ -18,7 +18,7 @@ SELECT
     f.col08,
     f.col09,
     f.col10
-FROM file_context f
+FROM row_classification f
 INNER JOIN metadata_layouts l
     ON f.source_system = l.source_system
    AND f.file_start_dt >= CAST(l.effective_start_dt AS date)
@@ -26,3 +26,4 @@ INNER JOIN metadata_layouts l
         try_cast(nullif(trim(l.effective_end_dt), '') AS date),
         current_date
     )
+WHERE f.row_classification = 'transaction'
