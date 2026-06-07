@@ -9,9 +9,12 @@ SELECT
     layout_id,
     derived_row_serial,
     transaction_date,
-    try_cast(transaction_date AS date) AS transaction_dt,
     description,
     try_cast(amount AS decimal(18, 2)) AS amount,
+COALESCE(
+    try_cast(transaction_date AS date),
+    CAST(try(date_parse(transaction_date, '%m/%d/%Y')) AS date)
+) AS transaction_dt,
     check_number,
     status,
     row_pattern_passed
