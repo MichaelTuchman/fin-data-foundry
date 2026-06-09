@@ -174,7 +174,7 @@ server <- function(input, output, session) {
   # Render editable DT
   output$layout_table <- renderDT({
     req(rv$layout)
-    datatable(
+    dt <- datatable(
       rv$layout,
       rownames  = FALSE,
       editable  = list(target = "cell",
@@ -195,21 +195,17 @@ server <- function(input, output, session) {
         "Original Name", "Intended Name",
         "Type", "Usage", "Description"
       )
-    ) |>
-      formatStyle(
-        "type",
-        backgroundColor = styleEqual(
-          c("char", "numeric"),
-          c("#eaf4fb", "#eafaf1")
-        )
-      ) |>
-      formatStyle(
-        "usage",
-        color = styleEqual(
-          c("monetary", "date"),
-          c("#8e44ad", "#c0392b")
-        )
-      )
+    )
+    dt <- formatStyle(dt, "type",
+                      backgroundColor = styleEqual(
+                        c("char", "numeric"),
+                        c("#eaf4fb", "#eafaf1")
+                      ))
+    formatStyle(dt, "usage",
+                color = styleEqual(
+                  c("monetary", "date"),
+                  c("#8e44ad", "#c0392b")
+                ))
   }, server = TRUE)
 
   # Capture cell edits
