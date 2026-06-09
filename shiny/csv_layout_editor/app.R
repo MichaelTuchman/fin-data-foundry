@@ -1,11 +1,51 @@
 library(shiny)
 library(DT)
 library(lubridate)
+library(shinyFiles)
 
 # Null-coalescing operator
 `%||%` <- function(a, b) if (!is.null(a) && nchar(a) > 0) a else b
 
 is_valid_id <- function(s) grepl("^[A-Za-z_.][A-Za-z0-9_.]*$", trimws(s))
+
+# Windows Downloads folder (works for any user)
+default_downloads <- normalizePath(
+  file.path(Sys.getenv("USERPROFILE"), "Downloads"),
+  winslash = "/", mustWork = FALSE
+)
+
+# Filesystem roots for the directory browser
+dir_roots <- c(
+  Home      = normalizePath("~",    winslash = "/"),
+  Downloads = default_downloads,
+  C         = "C:/"
+)
+
+# --------------------------------------------------------------------------
+# Filename parser: impute source_system, account_id, valid_from from name
+#   aaa_bbb_yyyymmdd
+#   aaa_bbb_yyyymm_yyyymm
+# Returns a list or NULL if pattern not matched.
+# --------------------------------------------------------------------------
+parse_filename <- function(filename) {
+  base <- tools::file_path_sans_ext(basename(filename))
+
+  # Pattern 1: aaa_bbb_yyyymmdd
+  m <- regmatches(base, regexec("^([^_]+)_([^_]+)_([0-9]{8})$", base))[[1]]
+  if (length(m) == 4) {
+    d <- suppressWarnings(as.Date(m[4], format = "%Y%m%d"))
+    if (!is.na(d)) return(list(source_system = m[2], account_id = m[3], valid_from = d))
+  }
+
+  # Pattern 2: aaa_bbb_yyyymm_yyyymm
+  m <- regmatches(base, regexec("^([^_]+)_([^_]+)_([0-9]{6})_([0-9]{6})$", base))[[1]]
+  if (length(m) == 5) {
+    d <- suppressWarnings(as.Date(paste0(m[4], "01"), format = "%Y%m%d"))
+    if (!is.na(d)) return(list(source_system = m[2], account_id = m[3], valid_from = d))
+  }
+
+  NULL
+}
 
 # --------------------------------------------------------------------------
 # Inference helpers
@@ -57,12 +97,9 @@ infer_column_name <- function(raw_name) {
   nm
 }
 
-# Replace blank or NA column names with col_1, col_2, ...
 fix_colnames <- function(nms) {
   for (i in seq_along(nms)) {
-    if (is.na(nms[i]) || trimws(nms[i]) == "") {
-      nms[i] <- paste0("col_", i)
-    }
+    if (is.na(nms[i]) || trimws(nms[i]) == "") nms[i] <- paste0("col_", i)
   }
   nms
 }
@@ -96,12 +133,10 @@ upsert_csv <- function(filepath, new_rows, key_cols) {
       read.csv(filepath, stringsAsFactors = FALSE, check.names = FALSE),
       error = function(e) new_rows[0, ]
     )
-    # Align columns
     for (col in setdiff(names(new_rows), names(existing))) existing[[col]] <- NA
     for (col in setdiff(names(existing), names(new_rows))) new_rows[[col]] <- NA
     existing <- existing[, names(new_rows), drop = FALSE]
     combined <- rbind(existing, new_rows)
-    # Deduplicate: keep last occurrence for each key combination
     key_vals <- do.call(paste, c(combined[, key_cols, drop = FALSE], sep = "||"))
     combined <- combined[!duplicated(key_vals, fromLast = TRUE), ]
   } else {
@@ -124,7 +159,9 @@ ui <- fluidPage(
       ".btn-success { background-color: #27ae60; border-color: #219a52; }",
       ".field-error { color: #c0392b; font-size: 12px; margin-top: -10px; margin-bottom: 6px; }",
       "#status_msg { font-weight: bold; margin-top: 8px; }",
-      "#save_msg { margin-top: 8px; }"
+      "#save_msg { margin-top: 8px; }",
+      ".dir-row { display: flex; gap: 6px; align-items: flex-end; }",
+      ".dir-row .form-group { flex: 1; margin-bottom: 0; }"
     )))
   ),
 
@@ -171,11 +208,15 @@ ui <- fluidPage(
         placeholder = "YYYY-MM-DD"
       ),
       uiOutput("valid_to_msg"),
+
       # TODO: replace file output with direct S3 upload once bucket hierarchy is finalized
-      textInput("output_dir", "Output Directory",
-        value = normalizePath("~/Downloads", winslash = "/", mustWork = FALSE)
+      tags$label("Output Directory"),
+      tags$div(class = "dir-row",
+        textInput("output_dir", label = NULL, value = default_downloads),
+        shinyDirButton("browse_dir", "...", "Select output folder",
+                       style = "margin-bottom:15px;")
       ),
-      br(),
+
       actionButton("save_layout", "Save Layout Files", class = "btn-success",
         icon = icon("floppy-disk")
       ),
@@ -236,6 +277,16 @@ server <- function(input, output, session) {
     layout    = NULL
   )
 
+  # Directory browser
+  shinyDirChoose(input, "browse_dir", roots = dir_roots, session = session)
+  observeEvent(input$browse_dir, {
+    path <- parseDirPath(dir_roots, input$browse_dir)
+    if (length(path) > 0 && nchar(path) > 0) {
+      updateTextInput(session, "output_dir",
+        value = normalizePath(path, winslash = "/", mustWork = FALSE))
+    }
+  })
+
   # Inline validation messages
   output$source_system_msg <- renderUI({
     s <- input$source_system
@@ -265,7 +316,7 @@ server <- function(input, output, session) {
     if (is.na(d)) tags$div(class = "field-error", "Must be YYYY-MM-DD or leave blank.")
   })
 
-  # Load CSV
+  # Load CSV and impute fields from filename
   observeEvent(input$csv_file, {
     req(input$csv_file)
     tryCatch({
@@ -276,10 +327,18 @@ server <- function(input, output, session) {
         stringsAsFactors = FALSE,
         check.names      = FALSE
       )
-      colnames(df)  <- fix_colnames(colnames(df))
+      colnames(df) <- fix_colnames(colnames(df))
       rv$raw_df    <- df
       rv$raw_names <- colnames(df)
       rv$layout    <- build_layout(df, colnames(df))
+
+      # Impute metadata fields from filename
+      parsed <- parse_filename(input$csv_file$name)
+      if (!is.null(parsed)) {
+        updateTextInput(session,  "source_system", value = parsed$source_system)
+        updateTextInput(session,  "account_id",    value = parsed$account_id)
+        updateDateInput(session,  "valid_from",    value = parsed$valid_from)
+      }
     }, error = function(e) {
       showNotification(paste("Error reading file:", e$message),
         type = "error", duration = 8)
@@ -323,7 +382,7 @@ server <- function(input, output, session) {
     dt
   }, server = TRUE)
 
-  # Capture edits — map display column index back to rv$layout column index
+  # Capture edits
   observeEvent(input$layout_table_cell_edit, {
     info    <- input$layout_table_cell_edit
     col_idx <- info$col + 1L
@@ -339,13 +398,13 @@ server <- function(input, output, session) {
     head(rv$raw_df, 10)
   }, striped = TRUE, hover = TRUE, bordered = TRUE, na = "")
 
-  # Visibility flag for conditionalPanel
+  # Visibility flag
   output$file_loaded <- renderText({
     if (!is.null(rv$raw_df)) "yes" else ""
   })
   outputOptions(output, "file_loaded", suspendWhenHidden = FALSE)
 
-  # Save layout files
+  # Save all three layout files
   observeEvent(input$save_layout, {
     req(rv$layout)
 
@@ -366,14 +425,12 @@ server <- function(input, output, session) {
     if (length(errors) > 0) {
       output$save_msg <- renderUI({
         tags$div(class = "field-error",
-          lapply(errors, function(e) tags$div(e)))
+          lapply(errors, function(msg) tags$div(msg)))
       })
       return()
     }
 
-    if (!dir.exists(out_dir)) {
-      dir.create(out_dir, recursive = TRUE)
-    }
+    if (!dir.exists(out_dir)) dir.create(out_dir, recursive = TRUE)
 
     ss  <- input$source_system
     ai  <- input$account_id
@@ -381,51 +438,48 @@ server <- function(input, output, session) {
     vf  <- as.character(input$valid_from)
     vt  <- if (nchar(valid_to_val) > 0) valid_to_val else NA_character_
 
-    # --- layout_cols.csv ---
-    layout_cols <- data.frame(
-      source_system = ss,
-      account_id    = ai,
-      layout_id     = lid,
-      column_number = seq_len(nrow(rv$layout)),
-      column_type   = rv$layout$type,
-      usage_type    = rv$layout$usage,
-      format        = rv$layout$format,
-      original_name = rv$layout$original_name,
-      intended_name = rv$layout$intended_name,
-      description   = rv$layout$description,
-      stringsAsFactors = FALSE
-    )
+    # layout_cols.csv
     upsert_csv(
       file.path(out_dir, "layout_cols.csv"),
-      layout_cols,
+      data.frame(
+        source_system = ss,
+        account_id    = ai,
+        layout_id     = lid,
+        column_number = seq_len(nrow(rv$layout)),
+        column_type   = rv$layout$type,
+        usage_type    = rv$layout$usage,
+        format        = rv$layout$format,
+        original_name = rv$layout$original_name,
+        intended_name = rv$layout$intended_name,
+        description   = rv$layout$description,
+        stringsAsFactors = FALSE
+      ),
       key_cols = c("source_system", "account_id", "layout_id", "column_number")
     )
 
-    # --- layout.csv ---
-    layout_row <- data.frame(
-      source_system    = ss,
-      account_id       = ai,
-      layout_id        = lid,
-      layout_valid_from = vf,
-      layout_valid_to  = vt,
-      stringsAsFactors = FALSE
-    )
+    # layout.csv
     upsert_csv(
       file.path(out_dir, "layout.csv"),
-      layout_row,
+      data.frame(
+        source_system     = ss,
+        account_id        = ai,
+        layout_id         = lid,
+        layout_valid_from = vf,
+        layout_valid_to   = vt,
+        stringsAsFactors  = FALSE
+      ),
       key_cols = c("source_system", "account_id", "layout_id")
     )
 
-    # --- account.csv ---
-    account_row <- data.frame(
-      source_id    = ss,
-      account_id   = ai,
-      account_type = input$account_type,
-      stringsAsFactors = FALSE
-    )
+    # account.csv
     upsert_csv(
       file.path(out_dir, "account.csv"),
-      account_row,
+      data.frame(
+        source_id    = ss,
+        account_id   = ai,
+        account_type = input$account_type,
+        stringsAsFactors = FALSE
+      ),
       key_cols = c("source_id", "account_id")
     )
 
