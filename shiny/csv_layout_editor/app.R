@@ -24,7 +24,7 @@ infer_usage <- function(x, type) {
     "^[A-Za-z]{3}\\s+\\d{1,2},?\\s+\\d{4}$"
   )
   date_hits <- vapply(date_patterns,
-                      function(p) mean(grepl(p, x_clean)),
+                      (function(p) mean(grepl(p, x_clean))),
                       numeric(1))
   if (max(date_hits, na.rm = TRUE) >= 0.70) return("date")
   # Monetary check
@@ -105,7 +105,7 @@ ui <- fluidPage(
       conditionalPanel(
         condition = "output.file_loaded",
         wellPanel(
-          h3("Column Layout  —  edit any cell directly"),
+          h3("Column Layout -- edit any cell directly"),
           helpText(
             "Type: 'char' or 'numeric'  |  ",
             "Usage (numeric only): 'monetary', 'date', or 'numeric'  |  ",
