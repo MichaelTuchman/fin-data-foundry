@@ -102,7 +102,7 @@ upsert_csv <- function(filepath, new_rows, key_cols) {
     existing <- existing[, names(new_rows), drop = FALSE]
     combined <- rbind(existing, new_rows)
     # Deduplicate: keep last occurrence for each key combination
-    key_vals <- do.call(paste, c(combined[, key_cols, drop = FALSE], sep = "\x00"))
+    key_vals <- do.call(paste, c(combined[, key_cols, drop = FALSE], sep = "||"))
     combined <- combined[!duplicated(key_vals, fromLast = TRUE), ]
   } else {
     combined <- new_rows
