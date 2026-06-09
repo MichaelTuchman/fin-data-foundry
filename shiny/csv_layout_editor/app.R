@@ -119,7 +119,7 @@ ui <- fluidPage(
       width = 9,
 
       conditionalPanel(
-        condition = "output.file_loaded",
+        condition = "output.file_loaded === 'yes'",
 
         wellPanel(
           h3("Column Layout -- edit any cell directly"),
@@ -144,7 +144,7 @@ ui <- fluidPage(
       ),
 
       conditionalPanel(
-        condition = "!output.file_loaded",
+        condition = "output.file_loaded !== 'yes'",
         div(
           style = "text-align:center; padding: 80px; color: #7f8c8d;",
           h4("Load a CSV file to get started.")
@@ -248,8 +248,10 @@ server <- function(input, output, session) {
     head(rv$raw_df, 10)
   }, striped = TRUE, hover = TRUE, bordered = TRUE, na = "")
 
-  # Reactive flag used by conditionalPanel
-  output$file_loaded <- reactive(!is.null(rv$raw_df))
+  # Output flag used by conditionalPanel
+  output$file_loaded <- renderText({
+    if (!is.null(rv$raw_df)) "yes" else ""
+  })
   outputOptions(output, "file_loaded", suspendWhenHidden = FALSE)
 
   # Save layout as CSV
