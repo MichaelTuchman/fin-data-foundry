@@ -352,6 +352,16 @@ server <- function(input, output, session) {
     }
   })
 
+  # Auto-set account_type from keywords in account_id
+  observeEvent(input$account_id, {
+    s <- tolower(input$account_id)
+    if (grepl("visa|\\bmc\\b|mastercard|credit", s)) {
+      updateSelectInput(session, "account_type", selected = "Credit Card")
+    } else if (grepl("chk|checking", s)) {
+      updateSelectInput(session, "account_type", selected = "Checking")
+    }
+  })
+
   # Inline validation messages
   output$source_system_msg <- renderUI({
     s <- input$source_system
@@ -606,13 +616,14 @@ server <- function(input, output, session) {
     )
 
     saved_files <- c("layout_cols.csv", "layout.csv", "account.csv")
+    code_style  <- "background:#e8f4fb; color:#1a6a9a; border:none; padding:2px 4px;"
     output$save_msg <- renderUI({
       tags$div(style = "color: #27ae60;",
         tags$strong("Files saved to:"),
         tags$br(),
-        tags$code(out_dir),
+        tags$code(style = code_style, out_dir),
         tags$ul(style = "margin-top:6px;",
-          lapply(saved_files, function(f) tags$li(tags$code(f)))
+          lapply(saved_files, function(f) tags$li(tags$code(style = code_style, f)))
         )
       )
     })
