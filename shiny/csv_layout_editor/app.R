@@ -23,8 +23,6 @@ dir_roots <- c(
 
 # --------------------------------------------------------------------------
 # Read CSV with automatic retry on unmatched-quote warning.
-# First attempt uses normal quoting; if R warns about EOF in a quoted
-# string, retries with quote = "" to ignore all quoting.
 # --------------------------------------------------------------------------
 read_csv_safe <- function(path, header, sep, skip) {
   args <- list(
@@ -35,7 +33,6 @@ read_csv_safe <- function(path, header, sep, skip) {
     stringsAsFactors = FALSE,
     check.names      = FALSE
   )
-
   warned <- FALSE
   df <- withCallingHandlers(
     do.call(read.csv, args),
@@ -46,20 +43,16 @@ read_csv_safe <- function(path, header, sep, skip) {
       }
     }
   )
-
   if (warned) {
     args$quote <- ""
     df <- do.call(read.csv, args)
     attr(df, "requoted") <- TRUE
   }
-
   df
 }
 
 # --------------------------------------------------------------------------
 # Filename parser: impute source_system, account_id, valid_from from name
-#   aaa_bbb_yyyymmdd
-#   aaa_bbb_yyyymm_yyyymm
 # --------------------------------------------------------------------------
 parse_filename <- function(filename) {
   base <- tools::file_path_sans_ext(basename(filename))
@@ -85,23 +78,18 @@ parse_filename <- function(filename) {
 detect_skip_rows <- function(filepath, sep = ",", n_scan = 30) {
   lines <- readLines(filepath, n = n_scan, warn = FALSE)
   if (length(lines) < 2) return(0L)
-
   field_counts <- vapply(lines, function(l) {
     length(strsplit(l, sep, fixed = TRUE)[[1]])
   }, integer(1))
-
-  tbl        <- sort(table(field_counts), decreasing = TRUE)
-  mode_count <- as.integer(names(tbl)[1])
+  tbl         <- sort(table(field_counts), decreasing = TRUE)
+  mode_count  <- as.integer(names(tbl)[1])
   first_match <- which(field_counts == mode_count)[1]
   max(0L, first_match - 1L)
 }
 
 # --------------------------------------------------------------------------
-# Usage inference -- no type column, everything treated as character
-# 1. Try to parse values as a date format
-# 2. Try to parse values as a monetary amount
-# 3. Column name contains "date" as a fallback
-# 4. Otherwise: unclassified
+# Usage inference
+# Values: "date", "money", "text"
 # --------------------------------------------------------------------------
 
 DATE_SPECS <- list(
@@ -113,7 +101,7 @@ DATE_SPECS <- list(
   list(regexp = "^[A-Za-z]{3}\\s+[0-9]{1,2},?\\s+[0-9]{4}$", fmt = "%b %d, %Y")
 )
 
-MONETARY_REGEXP <- "^-?\\$?[0-9,]+(\\.[0-9]{2})?$"
+MONEY_REGEXP <- "^-?\\$?[0-9,]+(\\.[0-9]{2})?$"
 
 infer_usage_and_format <- function(x, col_name = "") {
   x_clean <- x[!is.na(x) & trimws(x) != ""]
@@ -127,14 +115,13 @@ infer_usage_and_format <- function(x, col_name = "") {
     }
   }
 
-  # 2. Monetary: strip $, commas, parens and try as.numeric
+  # 2. Money: strip $, commas, parens and try as.numeric
   if (length(x_clean) > 0) {
     stripped <- gsub("[$, ]", "", x_clean)
-    # treat (123.45) as -123.45
     stripped <- gsub("^\\((.+)\\)$", "-\\1", stripped)
     parsed   <- suppressWarnings(as.numeric(stripped))
     if (mean(!is.na(parsed)) >= 0.80 && mean(grepl("[$,()]", x_clean)) >= 0.10) {
-      return(list(usage = "monetary", format = MONETARY_REGEXP))
+      return(list(usage = "money", format = MONEY_REGEXP))
     }
   }
 
@@ -143,8 +130,8 @@ infer_usage_and_format <- function(x, col_name = "") {
     return(list(usage = "date", format = ""))
   }
 
-  # 4. Unclassified
-  list(usage = "", format = "")
+  # 4. Default: text
+  list(usage = "text", format = "")
 }
 
 infer_column_name <- function(raw_name) {
@@ -172,7 +159,7 @@ build_layout <- function(df, raw_names) {
       usage         = uf$usage,
       format        = uf$format,
       description   = "",
-      excluded      = FALSE,
+      required      = TRUE,
       stringsAsFactors = FALSE
     )
   })
@@ -291,10 +278,10 @@ ui <- fluidPage(
         condition = "output.file_loaded === 'yes'",
 
         wellPanel(
-          h3("Column Layout -- edit any cell directly"),
+          h3("Column Layout -- edit cells directly; uncheck Required to omit a column"),
           helpText(
-            "Usage: date, monetary, or leave blank  |  ",
-            "Format: lubridate string for dates, regexp for monetary  |  ",
+            "Usage: date, money, or text  |  ",
+            "Format: lubridate string for dates, regexp for money  |  ",
             "Intended Name and Description are free-text."
           ),
           DTOutput("layout_table"),
@@ -305,18 +292,20 @@ ui <- fluidPage(
         ),
 
         wellPanel(
-          h3("Data Preview (first 10 rows)  -- click a column layout row to exclude/include it"),
+          h3("Data Preview (first 10 rows)"),
           div(style = "overflow-x:auto;",
             DTOutput("data_preview")
           )
         ),
 
-        tags$script(HTML(
-          "$(document).on('click', '#layout_table tbody tr', function() {",
-          "  var idx = $(this).closest('tbody').find('tr').index(this);",
-          "  Shiny.setInputValue('layout_row_clicked', idx + 1, {priority: 'event'});",
+        # Checkbox toggle handler
+        tags$script(HTML(paste0(
+          "$(document).on('change', '#layout_table input[type=\"checkbox\"]', function() {",
+          "  var idx = $(this).closest('tbody').find('tr').index($(this).closest('tr'));",
+          "  Shiny.setInputValue('layout_checkbox_changed',",
+          "    {row: idx + 1, checked: this.checked}, {priority: 'event'});",
           "});"
-        ))
+        )))
       ),
 
       conditionalPanel(
@@ -391,7 +380,7 @@ server <- function(input, output, session) {
     if (is.na(d)) tags$div(class = "field-error", "Must be YYYY-MM-DD or leave blank.")
   })
 
-  # Load CSV and impute fields from filename
+  # Load CSV
   observeEvent(input$csv_file, {
     req(input$csv_file)
     tryCatch({
@@ -400,8 +389,7 @@ server <- function(input, output, session) {
 
       df <- read_csv_safe(input$csv_file$datapath, input$has_header, input$delimiter, skip)
       if (isTRUE(attr(df, "requoted"))) {
-        showNotification(
-          "Unmatched quotes detected -- re-parsed with quoting disabled.",
+        showNotification("Unmatched quotes detected -- re-parsed with quoting disabled.",
           type = "warning", duration = 6)
       }
       colnames(df) <- fix_colnames(colnames(df))
@@ -428,8 +416,7 @@ server <- function(input, output, session) {
       df <- read_csv_safe(input$csv_file$datapath, input$has_header,
                           input$delimiter, max(0L, as.integer(input$skip_rows)))
       if (isTRUE(attr(df, "requoted"))) {
-        showNotification(
-          "Unmatched quotes detected -- re-parsed with quoting disabled.",
+        showNotification("Unmatched quotes detected -- re-parsed with quoting disabled.",
           type = "warning", duration = 6)
       } else {
         showNotification("File reloaded.", type = "message")
@@ -451,77 +438,88 @@ server <- function(input, output, session) {
     showNotification("Layout reset to inferred values.", type = "message")
   })
 
-  # Editable layout table -- click any row to toggle exclusion
+  # Editable layout table with Required checkbox column
   output$layout_table <- renderDT({
     req(rv$layout)
-    # Build display without the excluded column (used only for styling)
+
     display <- rv$layout[, c("original_name", "intended_name", "usage", "format", "description")]
     names(display) <- c("Original Name", "Intended Name", "Usage", "Format", "Description")
 
-    excluded_js <- paste(which(rv$layout$excluded) - 1L, collapse = ",")
+    # Render required as HTML checkboxes
+    display[["Required"]] <- ifelse(
+      rv$layout$required,
+      '<input type="checkbox" checked>',
+      '<input type="checkbox">'
+    )
 
     dt <- datatable(
       display,
       rownames  = FALSE,
-      editable  = list(target = "cell", disable = list(columns = 0)),
+      escape    = FALSE,
+      editable  = list(target = "cell", disable = list(columns = c(0, 5))),
       selection = "none",
       options   = list(
         pageLength = 25,
         dom        = "tp",
         columnDefs = list(
-          list(width = "150px", targets = 0),
-          list(width = "150px", targets = 1),
-          list(width = "100px", targets = 2),
-          list(width = "200px", targets = 3),
-          list(width = "220px", targets = 4)
-        ),
-        rowCallback = JS(sprintf(
-          "function(row, data, index) {
-             var excl = [%s];
-             if (excl.indexOf(index) >= 0) {
-               $(row).css({'background-color':'#e0e0e0','color':'#999','text-decoration':'line-through'});
-             }
-             $(row).css('cursor','pointer');
-           }", excluded_js))
+          list(width = "140px", targets = 0),
+          list(width = "140px", targets = 1),
+          list(width = "80px",  targets = 2),
+          list(width = "180px", targets = 3),
+          list(width = "180px", targets = 4),
+          list(width = "70px",  targets = 5, className = "dt-center")
+        )
       )
     )
     dt <- formatStyle(dt, "Usage",
-      color = styleEqual(c("monetary", "date"), c("#8e44ad", "#c0392b")))
+      color = styleEqual(c("money", "date"), c("#8e44ad", "#c0392b")))
+    dt <- formatStyle(dt, "Required",
+      target = "row",
+      backgroundColor = styleEqual(c(
+        '<input type="checkbox">',
+        '<input type="checkbox" checked>'
+      ), c("#f0f0f0", "white")),
+      color = styleEqual(c(
+        '<input type="checkbox">',
+        '<input type="checkbox" checked>'
+      ), c("#aaaaaa", "inherit"))
+    )
     dt
   }, server = FALSE)
 
-  # JS click -> toggle excluded flag
-  observeEvent(input$layout_row_clicked, {
-    idx <- as.integer(input$layout_row_clicked)
+  # Checkbox state change -> update required flag
+  observeEvent(input$layout_checkbox_changed, {
+    info <- input$layout_checkbox_changed
+    idx  <- as.integer(info$row)
     if (!is.null(idx) && idx >= 1L && idx <= nrow(rv$layout)) {
-      rv$layout$excluded[idx] <- !rv$layout$excluded[idx]
+      rv$layout$required[idx] <- isTRUE(info$checked)
     }
   })
 
-  # Capture cell edits (columns 0-4 in display = cols 1-5 in rv$layout)
+  # Capture cell edits (display cols 0-4 map to rv$layout cols 1-5)
   observeEvent(input$layout_table_cell_edit, {
     info    <- input$layout_table_cell_edit
     col_idx <- info$col + 1L
+    if (col_idx > 5L) return()   # ignore Required column
     rv$layout[info$row, col_idx] <- DT::coerceValue(
       info$value, rv$layout[info$row, col_idx])
     if (col_idx == 3L) rv$layout[info$row, 3L] <- tolower(rv$layout[info$row, 3L])
   })
 
-  # Data preview -- grey out excluded columns
+  # Data preview -- grey out non-required columns
   output$data_preview <- renderDT({
     req(rv$raw_df, rv$layout)
     df <- head(rv$raw_df, 10)
     dt <- datatable(df,
       rownames  = FALSE,
       selection = "none",
-      options   = list(dom = "t", scrollX = TRUE, pageLength = 10,
-                       ordering = FALSE)
+      options   = list(dom = "t", scrollX = TRUE, pageLength = 10, ordering = FALSE)
     )
-    excluded_names <- rv$layout$original_name[rv$layout$excluded]
-    valid_excl     <- intersect(excluded_names, names(df))
-    if (length(valid_excl) > 0) {
-      dt <- formatStyle(dt, valid_excl,
-        backgroundColor = "#e0e0e0", color = "#aaaaaa")
+    not_required <- rv$layout$original_name[!rv$layout$required]
+    cols_to_grey <- intersect(not_required, names(df))
+    if (length(cols_to_grey) > 0) {
+      dt <- formatStyle(dt, cols_to_grey,
+        backgroundColor = "#ebebeb", color = "#aaaaaa")
     }
     dt
   })
@@ -563,28 +561,22 @@ server <- function(input, output, session) {
     ss  <- input$source_system
     ai  <- input$account_id
     lid <- input$layout_id
-
     vf  <- as.character(input$valid_from)
     vt  <- if (nchar(valid_to_val) > 0) valid_to_val else NA_character_
 
-    # layout_cols.csv -- excluded columns are omitted; column_number reflects original position
-    incl_idx  <- which(!rv$layout$excluded)
-    included  <- rv$layout[incl_idx, ]
+    # layout_cols.csv
     upsert_csv(
       file.path(out_dir, "layout_cols.csv"),
       data.frame(
         source_system = ss,
         account_id    = ai,
-        layout_id     = lid,
-        column_number = incl_idx,
-        usage_type    = included$usage,
-        format        = included$format,
-        original_name = included$original_name,
-        intended_name = included$intended_name,
-        description   = included$description,
+        column_number = seq_len(nrow(rv$layout)),
+        column_name   = rv$layout$original_name,
+        usage         = rv$layout$usage,
+        required      = ifelse(rv$layout$required, "True", "False"),
         stringsAsFactors = FALSE
       ),
-      key_cols = c("source_system", "account_id", "layout_id", "column_number")
+      key_cols = c("source_system", "account_id", "column_number")
     )
 
     # layout.csv
@@ -605,12 +597,12 @@ server <- function(input, output, session) {
     upsert_csv(
       file.path(out_dir, "account.csv"),
       data.frame(
-        source_id    = ss,
-        account_id   = ai,
-        account_type = input$account_type,
+        source_system = ss,
+        account_id    = ai,
+        account_type  = input$account_type,
         stringsAsFactors = FALSE
       ),
-      key_cols = c("source_id", "account_id")
+      key_cols = c("source_system", "account_id")
     )
 
     saved_files <- c("layout_cols.csv", "layout.csv", "account.csv")
