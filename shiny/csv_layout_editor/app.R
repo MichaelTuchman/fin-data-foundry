@@ -564,10 +564,8 @@ server <- function(input, output, session) {
     ai  <- input$account_id
     lid <- input$layout_id
 
-    # Force both dates to the first of the month
-    first_of_month <- function(d) format(as.Date(cut(as.Date(d), "month")), "%Y-%m-%d")
-    vf  <- first_of_month(input$valid_from)
-    vt  <- if (nchar(valid_to_val) > 0) first_of_month(valid_to_val) else NA_character_
+    vf  <- as.character(input$valid_from)
+    vt  <- if (nchar(valid_to_val) > 0) valid_to_val else NA_character_
 
     # layout_cols.csv -- excluded columns are omitted; column_number reflects original position
     incl_idx  <- which(!rv$layout$excluded)
