@@ -101,8 +101,21 @@ DATE_SPECS <- list(
   list(regexp = "^[A-Za-z]{3}\\s+[0-9]{1,2},?\\s+[0-9]{4}$", fmt = "%b %d, %Y")
 )
 
-# Covers: 1234.56  -1234.56  $1,234.56  (1,234.56)  -$1,234.56
-MONEY_REGEXP <- "^-?\\$?[0-9]{1,3}(,[0-9]{3})*(\\.[0-9]{2})?$|^\\([0-9]{1,3}(,[0-9]{3})*(\\.[0-9]{2})?\\)$"
+# Detect which money style a column uses and return a style-specific regexp (no OR).
+# Styles (mutually exclusive, checked in priority order):
+#   parenthetical  (1,234.56)          -> ^\\(?[0-9]{1,3}(,[0-9]{3})*(\\.[0-9]{2})?\\)?$
+#   dollar         -$1,234.56          -> ^-?\\$[0-9]{1,3}(,[0-9]{3})*(\\.[0-9]{2})?$
+#   comma          -1,234.56           -> ^-?[0-9]{1,3}(,[0-9]{3})*(\\.[0-9]{2})?$
+#   plain          -1234.56            -> ^-?[0-9]+(\\.[0-9]{2})?$
+money_regexp_for <- function(x_clean) {
+  if (mean(grepl("^\\(", x_clean)) >= 0.10)
+    return("^\\(?[0-9]{1,3}(,[0-9]{3})*(\\.[0-9]{2})?\\)?$")
+  if (mean(grepl("\\$", x_clean)) >= 0.10)
+    return("^-?\\$[0-9]{1,3}(,[0-9]{3})*(\\.[0-9]{2})?$")
+  if (mean(grepl(",", x_clean)) >= 0.10)
+    return("^-?[0-9]{1,3}(,[0-9]{3})*(\\.[0-9]{2})?$")
+  "^-?[0-9]+(\\.[0-9]{2})?$"
+}
 
 infer_usage_and_format <- function(x, col_name = "") {
   x_clean <- x[!is.na(x) & trimws(x) != ""]
@@ -123,11 +136,11 @@ infer_usage_and_format <- function(x, col_name = "") {
     stripped <- trimws(gsub("[$, ]", "", x_clean))
     stripped <- gsub("^\\((.+)\\)$", "-\\1", stripped)
     parsed   <- suppressWarnings(as.numeric(stripped))
-    parse_rate   <- mean(!is.na(parsed))
-    decimal_rate <- mean(grepl("\\.[0-9]{2}$", stripped))
+    parse_rate      <- mean(!is.na(parsed))
+    decimal_rate    <- mean(grepl("\\.[0-9]{2}$", stripped))
     money_char_rate <- mean(grepl("[$,()]", x_clean))
     if (parse_rate >= 0.70 && (decimal_rate >= 0.50 || money_char_rate >= 0.10)) {
-      return(list(usage = "money", format = MONEY_REGEXP))
+      return(list(usage = "money", format = money_regexp_for(x_clean)))
     }
   }
 
