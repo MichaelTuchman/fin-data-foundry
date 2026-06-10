@@ -94,27 +94,27 @@ NUMERIC_REGEXP  <- "^-?[0-9]+(\\.[0-9]+)?$"
 CHAR_REGEXP     <- ".*"
 
 infer_usage_and_format <- function(x, type, col_name = "") {
-  name_suggests_date <- grepl("date", col_name, ignore.case = TRUE)
-
-  if (type != "numeric" && !name_suggests_date) {
-    return(list(usage = "", format = CHAR_REGEXP))
-  }
-
   x_clean <- x[!is.na(x) & trimws(x) != ""]
-  if (length(x_clean) == 0) {
-    if (name_suggests_date) return(list(usage = "date", format = ""))
-    return(list(usage = "numeric", format = NUMERIC_REGEXP))
-  }
 
-  # Always check date patterns when column name suggests a date
-  for (ds in DATE_SPECS) {
-    if (mean(grepl(ds$regexp, x_clean)) >= 0.70) {
-      return(list(usage = "date", format = ds$fmt))
+  # --- Date detection: run on ALL columns regardless of type ---
+  if (length(x_clean) > 0) {
+    for (ds in DATE_SPECS) {
+      if (mean(grepl(ds$regexp, x_clean)) >= 0.70) {
+        return(list(usage = "date", format = ds$fmt))
+      }
     }
   }
 
-  # Name says date but no pattern matched -- flag it with empty format for review
-  if (name_suggests_date) return(list(usage = "date", format = ""))
+  # --- Fallback: column name contains "date" but values didn't match a pattern ---
+  if (grepl("date", col_name, ignore.case = TRUE)) {
+    return(list(usage = "date", format = ""))
+  }
+
+  # --- Non-date char columns ---
+  if (type != "numeric") return(list(usage = "", format = CHAR_REGEXP))
+
+  # --- Numeric columns ---
+  if (length(x_clean) == 0) return(list(usage = "numeric", format = NUMERIC_REGEXP))
 
   monetary_hits <- mean(grepl("[$,()-]", x_clean))
   if (!is.nan(monetary_hits) && monetary_hits >= 0.30) {
