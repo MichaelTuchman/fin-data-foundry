@@ -48,6 +48,28 @@ parse_filename <- function(filename) {
 }
 
 # --------------------------------------------------------------------------
+# Auto-detect how many rows to skip before the header
+# Reads up to n_scan raw lines, counts fields per line, finds the first
+# line whose field count matches the modal count of the block.
+# --------------------------------------------------------------------------
+detect_skip_rows <- function(filepath, sep = ",", n_scan = 30) {
+  lines <- readLines(filepath, n = n_scan, warn = FALSE)
+  if (length(lines) < 2) return(0L)
+
+  field_counts <- vapply(lines, function(l) {
+    length(strsplit(l, sep, fixed = TRUE)[[1]])
+  }, integer(1))
+
+  # Modal field count = the "real" data width
+  tbl        <- sort(table(field_counts), decreasing = TRUE)
+  mode_count <- as.integer(names(tbl)[1])
+
+  # First line that has that count is the header
+  first_match <- which(field_counts == mode_count)[1]
+  max(0L, first_match - 1L)
+}
+
+# --------------------------------------------------------------------------
 # Inference helpers
 # --------------------------------------------------------------------------
 
@@ -179,6 +201,11 @@ ui <- fluidPage(
         choices = c("Comma" = ",", "Tab" = "\t", "Semicolon" = ";", "Pipe" = "|"),
         selected = ","
       ),
+      numericInput("skip_rows", "Rows to skip before header",
+        value = 0, min = 0, step = 1),
+      helpText("Auto-detected on file load. Override if needed."),
+      actionButton("reload_csv", "Reload with this skip value",
+        icon = icon("rotate"), class = "btn-sm"),
       hr(),
 
       h3("2. Account Metadata"),
@@ -320,10 +347,15 @@ server <- function(input, output, session) {
   observeEvent(input$csv_file, {
     req(input$csv_file)
     tryCatch({
+      # Auto-detect skip rows and update the UI control
+      skip <- detect_skip_rows(input$csv_file$datapath, sep = input$delimiter)
+      updateNumericInput(session, "skip_rows", value = skip)
+
       df <- read.csv(
         input$csv_file$datapath,
         header           = input$has_header,
         sep              = input$delimiter,
+        skip             = skip,
         stringsAsFactors = FALSE,
         check.names      = FALSE
       )
@@ -339,6 +371,29 @@ server <- function(input, output, session) {
         updateTextInput(session,  "account_id",    value = parsed$account_id)
         updateDateInput(session,  "valid_from",    value = parsed$valid_from)
       }
+    }, error = function(e) {
+      showNotification(paste("Error reading file:", e$message),
+        type = "error", duration = 8)
+    })
+  })
+
+  # Reload CSV with a manually adjusted skip value
+  observeEvent(input$reload_csv, {
+    req(input$csv_file)
+    tryCatch({
+      df <- read.csv(
+        input$csv_file$datapath,
+        header           = input$has_header,
+        sep              = input$delimiter,
+        skip             = max(0L, as.integer(input$skip_rows)),
+        stringsAsFactors = FALSE,
+        check.names      = FALSE
+      )
+      colnames(df) <- fix_colnames(colnames(df))
+      rv$raw_df    <- df
+      rv$raw_names <- colnames(df)
+      rv$layout    <- build_layout(df, colnames(df))
+      showNotification("File reloaded.", type = "message")
     }, error = function(e) {
       showNotification(paste("Error reading file:", e$message),
         type = "error", duration = 8)
