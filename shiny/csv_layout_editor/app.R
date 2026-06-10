@@ -93,16 +93,28 @@ MONETARY_REGEXP <- "^-?\\$?[0-9,]+(\\.[0-9]{2})?$"
 NUMERIC_REGEXP  <- "^-?[0-9]+(\\.[0-9]+)?$"
 CHAR_REGEXP     <- ".*"
 
-infer_usage_and_format <- function(x, type) {
-  if (type != "numeric") return(list(usage = "", format = CHAR_REGEXP))
-  x_clean <- x[!is.na(x) & trimws(x) != ""]
-  if (length(x_clean) == 0) return(list(usage = "numeric", format = NUMERIC_REGEXP))
+infer_usage_and_format <- function(x, type, col_name = "") {
+  name_suggests_date <- grepl("date", col_name, ignore.case = TRUE)
 
+  if (type != "numeric" && !name_suggests_date) {
+    return(list(usage = "", format = CHAR_REGEXP))
+  }
+
+  x_clean <- x[!is.na(x) & trimws(x) != ""]
+  if (length(x_clean) == 0) {
+    if (name_suggests_date) return(list(usage = "date", format = ""))
+    return(list(usage = "numeric", format = NUMERIC_REGEXP))
+  }
+
+  # Always check date patterns when column name suggests a date
   for (ds in DATE_SPECS) {
     if (mean(grepl(ds$regexp, x_clean)) >= 0.70) {
       return(list(usage = "date", format = ds$fmt))
     }
   }
+
+  # Name says date but no pattern matched -- flag it with empty format for review
+  if (name_suggests_date) return(list(usage = "date", format = ""))
 
   monetary_hits <- mean(grepl("[$,()-]", x_clean))
   if (!is.nan(monetary_hits) && monetary_hits >= 0.30) {
@@ -131,7 +143,7 @@ build_layout <- function(df, raw_names) {
   rows <- lapply(seq_along(raw_names), function(i) {
     col_data <- as.character(df[[i]])
     col_type <- infer_type(col_data)
-    uf       <- infer_usage_and_format(col_data, col_type)
+    uf       <- infer_usage_and_format(col_data, col_type, raw_names[i])
     data.frame(
       original_name = raw_names[i],
       intended_name = infer_column_name(raw_names[i]),
