@@ -236,12 +236,18 @@ ui <- fluidPage(
 
       h3("2. Account Metadata"),
       textInput("account_id", "Account ID",
-        placeholder = "e.g. Chase_Checking_1234"
+        placeholder = "e.g. joint_checking"
       ),
       uiOutput("account_id_msg"),
+      textInput("account_label", "Account Label",
+        placeholder = "e.g. Wells Fargo Checking"
+      ),
       selectInput("account_type", "Account Type",
-        choices = c("Checking" = "Checking", "Credit Card" = "Credit Card"),
-        selected = "Checking"
+        choices = c("checking" = "checking", "credit_card" = "credit_card"),
+        selected = "checking"
+      ),
+      textInput("institution", "Institution",
+        placeholder = "e.g. Wells Fargo"
       ),
       hr(),
 
@@ -352,9 +358,9 @@ server <- function(input, output, session) {
     req(nchar(trimws(input$account_id)) > 0)
     s <- tolower(input$account_id)
     if (grepl("visa|\\bmc\\b|mastercard|credit", s)) {
-      updateSelectInput(session, "account_type", selected = "Credit Card")
+      updateSelectInput(session, "account_type", selected = "credit_card")
     } else {
-      updateSelectInput(session, "account_type", selected = "Checking")
+      updateSelectInput(session, "account_type", selected = "checking")
     }
   })
 
@@ -618,7 +624,9 @@ server <- function(input, output, session) {
       data.frame(
         source_system = ss,
         account_id    = ai,
+        account_label = trimws(input$account_label),
         account_type  = input$account_type,
+        institution   = trimws(input$institution),
         stringsAsFactors = FALSE
       ),
       key_cols = c("source_system", "account_id")
