@@ -570,13 +570,14 @@ server <- function(input, output, session) {
       data.frame(
         source_system = ss,
         account_id    = ai,
+        layout_id     = lid,
         column_number = seq_len(nrow(rv$layout)),
         column_name   = rv$layout$original_name,
         usage         = rv$layout$usage,
         required      = ifelse(rv$layout$required, "True", "False"),
         stringsAsFactors = FALSE
       ),
-      key_cols = c("source_system", "account_id", "column_number")
+      key_cols = c("source_system", "account_id", "layout_id", "column_number")
     )
 
     # layout.csv
