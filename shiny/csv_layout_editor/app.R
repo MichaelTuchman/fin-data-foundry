@@ -188,11 +188,12 @@ build_layout <- function(df, raw_names) {
 # File helpers: append rows and deduplicate on key columns
 # --------------------------------------------------------------------------
 
+# Returns nrow of the final file, or stops with an informative message on error.
 upsert_csv <- function(filepath, new_rows, key_cols) {
   if (file.exists(filepath)) {
     existing <- tryCatch(
       read.csv(filepath, stringsAsFactors = FALSE, check.names = FALSE),
-      error = function(e) new_rows[0, ]
+      error = function(e) stop("Could not read ", basename(filepath), ": ", e$message)
     )
     for (col in setdiff(names(new_rows), names(existing))) existing[[col]] <- NA
     for (col in setdiff(names(existing), names(new_rows))) new_rows[[col]] <- NA
@@ -203,7 +204,11 @@ upsert_csv <- function(filepath, new_rows, key_cols) {
   } else {
     combined <- new_rows
   }
-  write.csv(combined, file = filepath, row.names = FALSE, quote = TRUE)
+  tryCatch(
+    write.csv(combined, file = filepath, row.names = FALSE, quote = TRUE),
+    error = function(e) stop("Could not write ", basename(filepath), ": ", e$message)
+  )
+  nrow(combined)
 }
 
 # --------------------------------------------------------------------------
@@ -607,59 +612,75 @@ server <- function(input, output, session) {
     vf  <- as.character(input$valid_from)
     vt  <- if (nchar(valid_to_val) > 0) valid_to_val else NA_character_
 
-    # layout_cols.csv
-    upsert_csv(
-      file.path(out_dir, "layout_cols.csv"),
-      data.frame(
-        source_system = ss,
-        account_id    = ai,
-        layout_id     = lid,
-        column_number = seq_len(nrow(rv$layout)),
-        column_name   = rv$layout$original_name,
-        usage         = rv$layout$usage,
-        required      = ifelse(rv$layout$required, "True", "False"),
-        stringsAsFactors = FALSE
-      ),
-      key_cols = c("source_system", "account_id", "layout_id", "column_number")
-    )
+    result <- tryCatch({
 
-    # layout.csv
-    upsert_csv(
-      file.path(out_dir, "layouts.csv"),
-      data.frame(
-        source_system     = ss,
-        account_id        = ai,
-        layout_id         = lid,
-        layout_valid_from = vf,
-        layout_valid_to   = vt,
-        stringsAsFactors  = FALSE
-      ),
-      key_cols = c("source_system", "account_id", "layout_id")
-    )
+      n_cols <- upsert_csv(
+        file.path(out_dir, "layout_cols.csv"),
+        data.frame(
+          source_system = ss,
+          account_id    = ai,
+          layout_id     = lid,
+          column_number = seq_len(nrow(rv$layout)),
+          column_name   = rv$layout$original_name,
+          usage         = rv$layout$usage,
+          required      = ifelse(rv$layout$required, "True", "False"),
+          stringsAsFactors = FALSE
+        ),
+        key_cols = c("source_system", "account_id", "layout_id", "column_number")
+      )
 
-    # account.csv
-    upsert_csv(
-      file.path(out_dir, "accounts.csv"),
-      data.frame(
-        source_system = ss,
-        account_id    = ai,
-        account_label = trimws(input$account_label),
-        account_type  = input$account_type,
-        institution   = trimws(input$institution),
-        stringsAsFactors = FALSE
-      ),
-      key_cols = c("source_system", "account_id")
-    )
+      n_layouts <- upsert_csv(
+        file.path(out_dir, "layouts.csv"),
+        data.frame(
+          source_system     = ss,
+          account_id        = ai,
+          layout_id         = lid,
+          layout_valid_from = vf,
+          layout_valid_to   = vt,
+          stringsAsFactors  = FALSE
+        ),
+        key_cols = c("source_system", "account_id", "layout_id")
+      )
 
-    saved_files <- c("layout_cols.csv", "layouts.csv", "accounts.csv")
-    code_style  <- "background:#e8f4fb; color:#1a6a9a; border:none; padding:2px 4px;"
+      n_accounts <- upsert_csv(
+        file.path(out_dir, "accounts.csv"),
+        data.frame(
+          source_system = ss,
+          account_id    = ai,
+          account_label = trimws(input$account_label),
+          account_type  = input$account_type,
+          institution   = trimws(input$institution),
+          stringsAsFactors = FALSE
+        ),
+        key_cols = c("source_system", "account_id")
+      )
+
+      list(ok = TRUE, n_cols = n_cols, n_layouts = n_layouts, n_accounts = n_accounts)
+    }, error = function(e) {
+      list(ok = FALSE, msg = e$message)
+    })
+
+    code_style <- "background:#e8f4fb; color:#1a6a9a; border:none; padding:2px 4px;"
+
+    if (!result$ok) {
+      output$save_msg <- renderUI({
+        tags$div(class = "field-error", paste("Save failed:", result$msg))
+      })
+      return()
+    }
+
     output$save_msg <- renderUI({
       tags$div(style = "color: #27ae60;",
         tags$strong("Files saved to:"),
         tags$br(),
         tags$code(style = code_style, out_dir),
         tags$ul(style = "margin-top:6px;",
-          lapply(saved_files, function(f) tags$li(tags$code(style = code_style, f)))
+          tags$li(tags$code(style = code_style, "layout_cols.csv"),
+            sprintf(" — %d rows", result$n_cols)),
+          tags$li(tags$code(style = code_style, "layouts.csv"),
+            sprintf(" — %d rows", result$n_layouts)),
+          tags$li(tags$code(style = code_style, "accounts.csv"),
+            sprintf(" — %d rows", result$n_accounts))
         )
       )
     })
