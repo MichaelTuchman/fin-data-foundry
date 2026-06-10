@@ -367,16 +367,16 @@ server <- function(input, output, session) {
   })
 
   # Auto-set account_type from account_id: credit card if mc/visa, else checking
-  observeEvent(input$account_id, {
-    req(nchar(trimws(input$account_id)) > 0)
-    s <- tolower(input$account_id)
+  observe({
+    s <- input$account_id
+    if (is.null(s) || nchar(trimws(s)) == 0) return()
 
-    # Auto-set source_system from prefix before first underscore
-    parts <- strsplit(input$account_id, "_")[[1]]
+    parts <- strsplit(s, "_")[[1]]
     if (length(parts) >= 2)
       updateTextInput(session, "source_system", value = parts[1])
 
-    if (grepl("visa|\\bmc\\b|mastercard|credit", s)) {
+    sl <- tolower(s)
+    if (grepl("visa|\\bmc\\b|mastercard|credit", sl)) {
       updateSelectInput(session, "account_type", selected = "credit_card")
     } else {
       updateSelectInput(session, "account_type", selected = "checking")
