@@ -22,6 +22,41 @@ dir_roots <- c(
 )
 
 # --------------------------------------------------------------------------
+# Read CSV with automatic retry on unmatched-quote warning.
+# First attempt uses normal quoting; if R warns about EOF in a quoted
+# string, retries with quote = "" to ignore all quoting.
+# --------------------------------------------------------------------------
+read_csv_safe <- function(path, header, sep, skip) {
+  args <- list(
+    file             = path,
+    header           = header,
+    sep              = sep,
+    skip             = skip,
+    stringsAsFactors = FALSE,
+    check.names      = FALSE
+  )
+
+  warned <- FALSE
+  df <- withCallingHandlers(
+    do.call(read.csv, args),
+    warning = function(w) {
+      if (grepl("EOF within quoted string", conditionMessage(w))) {
+        warned <<- TRUE
+        invokeRestart("muffleWarning")
+      }
+    }
+  )
+
+  if (warned) {
+    args$quote <- ""
+    df <- do.call(read.csv, args)
+    attr(df, "requoted") <- TRUE
+  }
+
+  df
+}
+
+# --------------------------------------------------------------------------
 # Filename parser: impute source_system, account_id, valid_from from name
 #   aaa_bbb_yyyymmdd
 #   aaa_bbb_yyyymm_yyyymm
@@ -185,7 +220,7 @@ ui <- fluidPage(
     )))
   ),
 
-  titlePanel("Metadata Editor"),
+  titlePanel("Financial Foundry Metadata Editor"),
 
   sidebarLayout(
 
@@ -347,14 +382,12 @@ server <- function(input, output, session) {
       skip <- detect_skip_rows(input$csv_file$datapath, sep = input$delimiter)
       updateNumericInput(session, "skip_rows", value = skip)
 
-      df <- read.csv(
-        input$csv_file$datapath,
-        header           = input$has_header,
-        sep              = input$delimiter,
-        skip             = skip,
-        stringsAsFactors = FALSE,
-        check.names      = FALSE
-      )
+      df <- read_csv_safe(input$csv_file$datapath, input$has_header, input$delimiter, skip)
+      if (isTRUE(attr(df, "requoted"))) {
+        showNotification(
+          "Unmatched quotes detected -- re-parsed with quoting disabled.",
+          type = "warning", duration = 6)
+      }
       colnames(df) <- fix_colnames(colnames(df))
       rv$raw_df    <- df
       rv$raw_names <- colnames(df)
@@ -376,19 +409,19 @@ server <- function(input, output, session) {
   observeEvent(input$reload_csv, {
     req(input$csv_file)
     tryCatch({
-      df <- read.csv(
-        input$csv_file$datapath,
-        header           = input$has_header,
-        sep              = input$delimiter,
-        skip             = max(0L, as.integer(input$skip_rows)),
-        stringsAsFactors = FALSE,
-        check.names      = FALSE
-      )
+      df <- read_csv_safe(input$csv_file$datapath, input$has_header,
+                          input$delimiter, max(0L, as.integer(input$skip_rows)))
+      if (isTRUE(attr(df, "requoted"))) {
+        showNotification(
+          "Unmatched quotes detected -- re-parsed with quoting disabled.",
+          type = "warning", duration = 6)
+      } else {
+        showNotification("File reloaded.", type = "message")
+      }
       colnames(df) <- fix_colnames(colnames(df))
       rv$raw_df    <- df
       rv$raw_names <- colnames(df)
       rv$layout    <- build_layout(df, colnames(df))
-      showNotification("File reloaded.", type = "message")
     }, error = function(e) {
       showNotification(paste("Error reading file:", e$message),
         type = "error", duration = 8)
