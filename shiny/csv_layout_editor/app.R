@@ -25,19 +25,16 @@ dir_roots <- c(
 # Filename parser: impute source_system, account_id, valid_from from name
 #   aaa_bbb_yyyymmdd
 #   aaa_bbb_yyyymm_yyyymm
-# Returns a list or NULL if pattern not matched.
 # --------------------------------------------------------------------------
 parse_filename <- function(filename) {
   base <- tools::file_path_sans_ext(basename(filename))
 
-  # Pattern 1: aaa_bbb_yyyymmdd
   m <- regmatches(base, regexec("^([^_]+)_([^_]+)_([0-9]{8})$", base))[[1]]
   if (length(m) == 4) {
     d <- suppressWarnings(as.Date(m[4], format = "%Y%m%d"))
     if (!is.na(d)) return(list(source_system = m[2], account_id = m[3], valid_from = d))
   }
 
-  # Pattern 2: aaa_bbb_yyyymm_yyyymm
   m <- regmatches(base, regexec("^([^_]+)_([^_]+)_([0-9]{6})_([0-9]{6})$", base))[[1]]
   if (length(m) == 5) {
     d <- suppressWarnings(as.Date(paste0(m[4], "01"), format = "%Y%m%d"))
@@ -48,9 +45,7 @@ parse_filename <- function(filename) {
 }
 
 # --------------------------------------------------------------------------
-# Auto-detect how many rows to skip before the header
-# Reads up to n_scan raw lines, counts fields per line, finds the first
-# line whose field count matches the modal count of the block.
+# Auto-detect rows to skip before the header
 # --------------------------------------------------------------------------
 detect_skip_rows <- function(filepath, sep = ",", n_scan = 30) {
   lines <- readLines(filepath, n = n_scan, warn = FALSE)
@@ -60,25 +55,19 @@ detect_skip_rows <- function(filepath, sep = ",", n_scan = 30) {
     length(strsplit(l, sep, fixed = TRUE)[[1]])
   }, integer(1))
 
-  # Modal field count = the "real" data width
   tbl        <- sort(table(field_counts), decreasing = TRUE)
   mode_count <- as.integer(names(tbl)[1])
-
-  # First line that has that count is the header
   first_match <- which(field_counts == mode_count)[1]
   max(0L, first_match - 1L)
 }
 
 # --------------------------------------------------------------------------
-# Inference helpers
+# Usage inference -- no type column, everything treated as character
+# 1. Try to parse values as a date format
+# 2. Try to parse values as a monetary amount
+# 3. Column name contains "date" as a fallback
+# 4. Otherwise: unclassified
 # --------------------------------------------------------------------------
-
-infer_type <- function(x) {
-  x_clean <- x[!is.na(x) & trimws(x) != ""]
-  if (length(x_clean) == 0) return("char")
-  num_attempt <- suppressWarnings(as.numeric(gsub("[,$%()\\ ]", "", x_clean)))
-  if (mean(!is.na(num_attempt)) >= 0.80) "numeric" else "char"
-}
 
 DATE_SPECS <- list(
   list(regexp = "^[0-9]{1,2}/[0-9]{1,2}/[0-9]{4}$",         fmt = "%m/%d/%Y"),
@@ -90,13 +79,11 @@ DATE_SPECS <- list(
 )
 
 MONETARY_REGEXP <- "^-?\\$?[0-9,]+(\\.[0-9]{2})?$"
-NUMERIC_REGEXP  <- "^-?[0-9]+(\\.[0-9]+)?$"
-CHAR_REGEXP     <- ".*"
 
-infer_usage_and_format <- function(x, type, col_name = "") {
+infer_usage_and_format <- function(x, col_name = "") {
   x_clean <- x[!is.na(x) & trimws(x) != ""]
 
-  # --- Date detection: run on ALL columns regardless of type ---
+  # 1. Date: pattern match on values
   if (length(x_clean) > 0) {
     for (ds in DATE_SPECS) {
       if (mean(grepl(ds$regexp, x_clean)) >= 0.70) {
@@ -105,23 +92,24 @@ infer_usage_and_format <- function(x, type, col_name = "") {
     }
   }
 
-  # --- Fallback: column name contains "date" but values didn't match a pattern ---
+  # 2. Monetary: strip $, commas, parens and try as.numeric
+  if (length(x_clean) > 0) {
+    stripped <- gsub("[$, ]", "", x_clean)
+    # treat (123.45) as -123.45
+    stripped <- gsub("^\\((.+)\\)$", "-\\1", stripped)
+    parsed   <- suppressWarnings(as.numeric(stripped))
+    if (mean(!is.na(parsed)) >= 0.80 && mean(grepl("[$,()]", x_clean)) >= 0.10) {
+      return(list(usage = "monetary", format = MONETARY_REGEXP))
+    }
+  }
+
+  # 3. Date fallback: column name contains "date"
   if (grepl("date", col_name, ignore.case = TRUE)) {
     return(list(usage = "date", format = ""))
   }
 
-  # --- Non-date char columns ---
-  if (type != "numeric") return(list(usage = "", format = CHAR_REGEXP))
-
-  # --- Numeric columns ---
-  if (length(x_clean) == 0) return(list(usage = "numeric", format = NUMERIC_REGEXP))
-
-  monetary_hits <- mean(grepl("[$,()-]", x_clean))
-  if (!is.nan(monetary_hits) && monetary_hits >= 0.30) {
-    return(list(usage = "monetary", format = MONETARY_REGEXP))
-  }
-
-  list(usage = "numeric", format = NUMERIC_REGEXP)
+  # 4. Unclassified
+  list(usage = "", format = "")
 }
 
 infer_column_name <- function(raw_name) {
@@ -142,12 +130,10 @@ build_layout <- function(df, raw_names) {
   raw_names <- fix_colnames(raw_names)
   rows <- lapply(seq_along(raw_names), function(i) {
     col_data <- as.character(df[[i]])
-    col_type <- infer_type(col_data)
-    uf       <- infer_usage_and_format(col_data, col_type, raw_names[i])
+    uf       <- infer_usage_and_format(col_data, raw_names[i])
     data.frame(
       original_name = raw_names[i],
       intended_name = infer_column_name(raw_names[i]),
-      type          = col_type,
       usage         = uf$usage,
       format        = uf$format,
       description   = "",
@@ -273,9 +259,8 @@ ui <- fluidPage(
         wellPanel(
           h3("Column Layout -- edit any cell directly"),
           helpText(
-            "Type: char or numeric  |  ",
-            "Usage (numeric only): monetary, date, or numeric  |  ",
-            "Format: lubridate string for dates, regexp for others  |  ",
+            "Usage: date, monetary, or leave blank  |  ",
+            "Format: lubridate string for dates, regexp for monetary  |  ",
             "Intended Name and Description are free-text."
           ),
           DTOutput("layout_table"),
@@ -359,7 +344,6 @@ server <- function(input, output, session) {
   observeEvent(input$csv_file, {
     req(input$csv_file)
     tryCatch({
-      # Auto-detect skip rows and update the UI control
       skip <- detect_skip_rows(input$csv_file$datapath, sep = input$delimiter)
       updateNumericInput(session, "skip_rows", value = skip)
 
@@ -376,12 +360,11 @@ server <- function(input, output, session) {
       rv$raw_names <- colnames(df)
       rv$layout    <- build_layout(df, colnames(df))
 
-      # Impute metadata fields from filename
       parsed <- parse_filename(input$csv_file$name)
       if (!is.null(parsed)) {
-        updateTextInput(session,  "source_system", value = parsed$source_system)
-        updateTextInput(session,  "account_id",    value = parsed$account_id)
-        updateDateInput(session,  "valid_from",    value = parsed$valid_from)
+        updateTextInput(session, "source_system", value = parsed$source_system)
+        updateTextInput(session, "account_id",    value = parsed$account_id)
+        updateDateInput(session, "valid_from",    value = parsed$valid_from)
       }
     }, error = function(e) {
       showNotification(paste("Error reading file:", e$message),
@@ -389,7 +372,7 @@ server <- function(input, output, session) {
     })
   })
 
-  # Reload CSV with a manually adjusted skip value
+  # Reload with manually adjusted skip value
   observeEvent(input$reload_csv, {
     req(input$csv_file)
     tryCatch({
@@ -419,11 +402,11 @@ server <- function(input, output, session) {
     showNotification("Layout reset to inferred values.", type = "message")
   })
 
-  # Editable layout table
+  # Editable layout table (no type column)
   output$layout_table <- renderDT({
     req(rv$layout)
     display <- rv$layout
-    names(display) <- c("Original Name", "Intended Name", "Type", "Usage", "Format", "Description")
+    names(display) <- c("Original Name", "Intended Name", "Usage", "Format", "Description")
     dt <- datatable(
       display,
       rownames  = FALSE,
@@ -433,30 +416,26 @@ server <- function(input, output, session) {
         pageLength = 25,
         dom        = "tp",
         columnDefs = list(
-          list(width = "140px", targets = 0),
-          list(width = "140px", targets = 1),
-          list(width = "80px",  targets = 2),
-          list(width = "90px",  targets = 3),
-          list(width = "190px", targets = 4),
-          list(width = "190px", targets = 5)
+          list(width = "150px", targets = 0),
+          list(width = "150px", targets = 1),
+          list(width = "100px", targets = 2),
+          list(width = "200px", targets = 3),
+          list(width = "220px", targets = 4)
         )
       )
     )
-    dt <- formatStyle(dt, "Type",
-      backgroundColor = styleEqual(c("char", "numeric"), c("#eaf4fb", "#eafaf1")))
     dt <- formatStyle(dt, "Usage",
       color = styleEqual(c("monetary", "date"), c("#8e44ad", "#c0392b")))
     dt
   }, server = TRUE)
 
-  # Capture edits
+  # Capture edits -- usage is col 3 (index 3L), normalise to lowercase
   observeEvent(input$layout_table_cell_edit, {
     info    <- input$layout_table_cell_edit
     col_idx <- info$col + 1L
     rv$layout[info$row, col_idx] <- DT::coerceValue(
       info$value, rv$layout[info$row, col_idx])
     if (col_idx == 3L) rv$layout[info$row, 3L] <- tolower(rv$layout[info$row, 3L])
-    if (col_idx == 4L) rv$layout[info$row, 4L] <- tolower(rv$layout[info$row, 4L])
   })
 
   # Data preview
@@ -513,7 +492,6 @@ server <- function(input, output, session) {
         account_id    = ai,
         layout_id     = lid,
         column_number = seq_len(nrow(rv$layout)),
-        column_type   = rv$layout$type,
         usage_type    = rv$layout$usage,
         format        = rv$layout$format,
         original_name = rv$layout$original_name,
