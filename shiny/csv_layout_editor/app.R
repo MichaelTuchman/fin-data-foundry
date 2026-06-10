@@ -157,7 +157,7 @@ infer_column_name <- function(raw_name) {
   nm <- trimws(raw_name)
   nm <- gsub("[^A-Za-z0-9 ]", " ", nm)
   nm <- trimws(gsub("\\s+", "_", nm))
-  nm
+  tolower(nm)
 }
 
 fix_colnames <- function(nms) {
@@ -212,7 +212,7 @@ upsert_csv <- function(filepath, new_rows, key_cols) {
     combined <- new_rows
   }
   tryCatch(
-    write.csv(combined, file = filepath, row.names = FALSE, quote = TRUE),
+    write.csv(combined, file = filepath, row.names = FALSE, quote = FALSE),
     error = function(e) stop("Could not write ", basename(filepath), ": ", e$message)
   )
   nrow(combined)
