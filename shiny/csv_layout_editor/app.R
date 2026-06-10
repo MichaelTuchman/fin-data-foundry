@@ -313,8 +313,7 @@ ui <- fluidPage(
 
         tags$script(HTML(
           "$(document).on('click', '#layout_table tbody tr', function() {",
-          "  var tbl = $('#layout_table').DataTable();",
-          "  var idx = tbl.row(this).index();",
+          "  var idx = $(this).closest('tbody').find('tr').index(this);",
           "  Shiny.setInputValue('layout_row_clicked', idx + 1, {priority: 'event'});",
           "});"
         ))
