@@ -195,12 +195,19 @@ upsert_csv <- function(filepath, new_rows, key_cols) {
       read.csv(filepath, stringsAsFactors = FALSE, check.names = FALSE),
       error = function(e) stop("Could not read ", basename(filepath), ": ", e$message)
     )
-    for (col in setdiff(names(new_rows), names(existing))) existing[[col]] <- NA
-    for (col in setdiff(names(existing), names(new_rows))) new_rows[[col]] <- NA
-    existing <- existing[, names(new_rows), drop = FALSE]
+    message("upsert ", basename(filepath), ": existing=", nrow(existing),
+            " new=", nrow(new_rows),
+            " existing_cols=", paste(names(existing), collapse=","),
+            " new_cols=", paste(names(new_rows), collapse=","))
+    all_cols <- union(names(existing), names(new_rows))
+    for (col in setdiff(all_cols, names(existing))) existing[[col]] <- NA
+    for (col in setdiff(all_cols, names(new_rows))) new_rows[[col]] <- NA
+    existing <- existing[, all_cols, drop = FALSE]
+    new_rows <- new_rows[, all_cols, drop = FALSE]
     combined <- rbind(existing, new_rows)
     key_vals <- do.call(paste, c(combined[, key_cols, drop = FALSE], sep = "||"))
     combined <- combined[!duplicated(key_vals, fromLast = TRUE), ]
+    message("upsert ", basename(filepath), ": combined=", nrow(combined))
   } else {
     combined <- new_rows
   }
