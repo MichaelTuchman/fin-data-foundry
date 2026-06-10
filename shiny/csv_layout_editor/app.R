@@ -211,10 +211,10 @@ upsert_csv <- function(filepath, new_rows, key_cols) {
   } else {
     combined <- new_rows
   }
+  quote_cols <- which(names(combined) == "expected_pattern")
   tryCatch(
-    quote_cols <- which(names(combined) == "expected_pattern")
-  write.table(combined, file = filepath, sep = ",", row.names = FALSE,
-              col.names = TRUE, quote = if (length(quote_cols) > 0) quote_cols else FALSE),
+    write.table(combined, file = filepath, sep = ",", row.names = FALSE,
+                col.names = TRUE, quote = if (length(quote_cols) > 0) quote_cols else FALSE),
     error = function(e) stop("Could not write ", basename(filepath), ": ", e$message)
   )
   nrow(combined)
