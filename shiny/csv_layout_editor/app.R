@@ -603,9 +603,16 @@ server <- function(input, output, session) {
       key_cols = c("source_id", "account_id")
     )
 
+    saved_files <- c("layout_cols.csv", "layout.csv", "account.csv")
     output$save_msg <- renderUI({
-      tags$div(style = "color: #27ae60; font-weight: bold;",
-        paste0("Saved to ", out_dir))
+      tags$div(style = "color: #27ae60;",
+        tags$strong("Files saved to:"),
+        tags$br(),
+        tags$code(out_dir),
+        tags$ul(style = "margin-top:6px;",
+          lapply(saved_files, function(f) tags$li(tags$code(f)))
+        )
+      )
     })
   })
 
