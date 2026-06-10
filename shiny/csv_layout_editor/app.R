@@ -624,16 +624,16 @@ server <- function(input, output, session) {
       n_cols <- upsert_csv(
         file.path(out_dir, "layout_cols.csv"),
         data.frame(
-          source_system = ss,
-          account_id    = ai,
-          layout_id     = lid,
-          column_number = seq_len(nrow(rv$layout)),
-          column_name   = rv$layout$original_name,
-          usage         = rv$layout$usage,
-          required      = ifelse(rv$layout$required, "True", "False"),
+          source_system    = ss,
+          account_id       = ai,
+          layout_id        = lid,
+          column_position  = seq_len(nrow(rv$layout)),
+          canonical_field  = rv$layout$intended_name,
+          expected_pattern = rv$layout$format,
+          required         = ifelse(rv$layout$required, "True", "False"),
           stringsAsFactors = FALSE
         ),
-        key_cols = c("source_system", "account_id", "layout_id", "column_number")
+        key_cols = c("source_system", "account_id", "layout_id", "column_position")
       )
 
       n_layouts <- upsert_csv(
