@@ -535,9 +535,12 @@ server <- function(input, output, session) {
     req(rv$layout)
 
     errors <- character(0)
-    if (!is_valid_id(input$source_system)) errors <- c(errors, "source_system is not a valid identifier.")
-    if (!is_valid_id(input$account_id))   errors <- c(errors, "account_id is not a valid identifier.")
-    if (!is_valid_id(input$layout_id))    errors <- c(errors, "layout_id is not a valid identifier.")
+    if (!is_valid_id(input$source_system)) errors <- c(errors,
+      paste0("source_system '", input$source_system, "' is not a valid identifier (letters, digits, _ or . only; must not start with a digit)."))
+    if (!is_valid_id(input$account_id)) errors <- c(errors,
+      paste0("account_id '", input$account_id, "' is not a valid identifier (letters, digits, _ or . only; must not start with a digit)."))
+    if (!is_valid_id(input$layout_id)) errors <- c(errors,
+      paste0("layout_id '", input$layout_id, "' is not a valid identifier (letters, digits, _ or . only; must not start with a digit)."))
 
     valid_to_val <- trimws(input$valid_to)
     if (nchar(valid_to_val) > 0) {
