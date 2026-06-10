@@ -172,6 +172,7 @@ build_layout <- function(df, raw_names) {
       usage         = uf$usage,
       format        = uf$format,
       description   = "",
+      excluded      = FALSE,
       stringsAsFactors = FALSE
     )
   })
@@ -256,9 +257,7 @@ ui <- fluidPage(
         placeholder = "e.g. Chase_Bank"
       ),
       uiOutput("source_system_msg"),
-      textInput("layout_id", "Layout ID",
-        placeholder = "e.g. chase_checking_v1"
-      ),
+      textInput("layout_id", "Layout ID", value = "LAYOUT_A"),
       uiOutput("layout_id_msg"),
       dateInput("valid_from", "Layout Valid From",
         value  = Sys.Date(),
@@ -306,11 +305,19 @@ ui <- fluidPage(
         ),
 
         wellPanel(
-          h3("Data Preview (first 10 rows)"),
+          h3("Data Preview (first 10 rows)  -- click a column layout row to exclude/include it"),
           div(style = "overflow-x:auto;",
-            tableOutput("data_preview")
+            DTOutput("data_preview")
           )
-        )
+        ),
+
+        tags$script(HTML(
+          "$(document).on('click', '#layout_table tbody tr', function() {",
+          "  var tbl = $('#layout_table').DataTable();",
+          "  var idx = tbl.row(this).index();",
+          "  Shiny.setInputValue('layout_row_clicked', idx + 1, {priority: 'event'});",
+          "});"
+        ))
       ),
 
       conditionalPanel(
@@ -435,11 +442,15 @@ server <- function(input, output, session) {
     showNotification("Layout reset to inferred values.", type = "message")
   })
 
-  # Editable layout table (no type column)
+  # Editable layout table -- click any row to toggle exclusion
   output$layout_table <- renderDT({
     req(rv$layout)
-    display <- rv$layout
+    # Build display without the excluded column (used only for styling)
+    display <- rv$layout[, c("original_name", "intended_name", "usage", "format", "description")]
     names(display) <- c("Original Name", "Intended Name", "Usage", "Format", "Description")
+
+    excluded_js <- paste(which(rv$layout$excluded) - 1L, collapse = ",")
+
     dt <- datatable(
       display,
       rownames  = FALSE,
@@ -454,15 +465,31 @@ server <- function(input, output, session) {
           list(width = "100px", targets = 2),
           list(width = "200px", targets = 3),
           list(width = "220px", targets = 4)
-        )
+        ),
+        rowCallback = JS(sprintf(
+          "function(row, data, index) {
+             var excl = [%s];
+             if (excl.indexOf(index) >= 0) {
+               $(row).css({'background-color':'#e0e0e0','color':'#999','text-decoration':'line-through'});
+             }
+             $(row).css('cursor','pointer');
+           }", excluded_js))
       )
     )
     dt <- formatStyle(dt, "Usage",
       color = styleEqual(c("monetary", "date"), c("#8e44ad", "#c0392b")))
     dt
-  }, server = TRUE)
+  }, server = FALSE)
 
-  # Capture edits -- usage is col 3 (index 3L), normalise to lowercase
+  # JS click -> toggle excluded flag
+  observeEvent(input$layout_row_clicked, {
+    idx <- as.integer(input$layout_row_clicked)
+    if (!is.null(idx) && idx >= 1L && idx <= nrow(rv$layout)) {
+      rv$layout$excluded[idx] <- !rv$layout$excluded[idx]
+    }
+  })
+
+  # Capture cell edits (columns 0-4 in display = cols 1-5 in rv$layout)
   observeEvent(input$layout_table_cell_edit, {
     info    <- input$layout_table_cell_edit
     col_idx <- info$col + 1L
@@ -471,11 +498,24 @@ server <- function(input, output, session) {
     if (col_idx == 3L) rv$layout[info$row, 3L] <- tolower(rv$layout[info$row, 3L])
   })
 
-  # Data preview
-  output$data_preview <- renderTable({
-    req(rv$raw_df)
-    head(rv$raw_df, 10)
-  }, striped = TRUE, hover = TRUE, bordered = TRUE, na = "")
+  # Data preview -- grey out excluded columns
+  output$data_preview <- renderDT({
+    req(rv$raw_df, rv$layout)
+    df <- head(rv$raw_df, 10)
+    dt <- datatable(df,
+      rownames  = FALSE,
+      selection = "none",
+      options   = list(dom = "t", scrollX = TRUE, pageLength = 10,
+                       ordering = FALSE)
+    )
+    excluded_names <- rv$layout$original_name[rv$layout$excluded]
+    valid_excl     <- intersect(excluded_names, names(df))
+    if (length(valid_excl) > 0) {
+      dt <- formatStyle(dt, valid_excl,
+        backgroundColor = "#e0e0e0", color = "#aaaaaa")
+    }
+    dt
+  })
 
   # Visibility flag
   output$file_loaded <- renderText({
@@ -517,19 +557,20 @@ server <- function(input, output, session) {
     vf  <- as.character(input$valid_from)
     vt  <- if (nchar(valid_to_val) > 0) valid_to_val else NA_character_
 
-    # layout_cols.csv
+    # layout_cols.csv -- excluded columns are omitted
+    included <- rv$layout[!rv$layout$excluded, ]
     upsert_csv(
       file.path(out_dir, "layout_cols.csv"),
       data.frame(
         source_system = ss,
         account_id    = ai,
         layout_id     = lid,
-        column_number = seq_len(nrow(rv$layout)),
-        usage_type    = rv$layout$usage,
-        format        = rv$layout$format,
-        original_name = rv$layout$original_name,
-        intended_name = rv$layout$intended_name,
-        description   = rv$layout$description,
+        column_number = seq_len(nrow(included)),
+        usage_type    = included$usage,
+        format        = included$format,
+        original_name = included$original_name,
+        intended_name = included$intended_name,
+        description   = included$description,
         stringsAsFactors = FALSE
       ),
       key_cols = c("source_system", "account_id", "layout_id", "column_number")
