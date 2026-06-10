@@ -101,7 +101,8 @@ DATE_SPECS <- list(
   list(regexp = "^[A-Za-z]{3}\\s+[0-9]{1,2},?\\s+[0-9]{4}$", fmt = "%b %d, %Y")
 )
 
-MONEY_REGEXP <- "^-?\\$?[0-9,]+(\\.[0-9]{2})?$"
+# Covers: 1234.56  -1234.56  $1,234.56  (1,234.56)  -$1,234.56
+MONEY_REGEXP <- "^-?\\$?[0-9]{1,3}(,[0-9]{3})*(\\.[0-9]{2})?$|^\\([0-9]{1,3}(,[0-9]{3})*(\\.[0-9]{2})?\\)$"
 
 infer_usage_and_format <- function(x, col_name = "") {
   x_clean <- x[!is.na(x) & trimws(x) != ""]
@@ -115,12 +116,17 @@ infer_usage_and_format <- function(x, col_name = "") {
     }
   }
 
-  # 2. Money: strip $, commas, parens and try as.numeric
+  # 2. Money: strip $ , spaces and convert (n) -> -n, then try as.numeric.
+  #    Qualify as money if >=70% parse AND >=50% have 2 decimal places
+  #    OR >=10% have explicit money characters ($, comma, parens).
   if (length(x_clean) > 0) {
-    stripped <- gsub("[$, ]", "", x_clean)
+    stripped <- trimws(gsub("[$, ]", "", x_clean))
     stripped <- gsub("^\\((.+)\\)$", "-\\1", stripped)
     parsed   <- suppressWarnings(as.numeric(stripped))
-    if (mean(!is.na(parsed)) >= 0.80 && mean(grepl("[$,()]", x_clean)) >= 0.10) {
+    parse_rate   <- mean(!is.na(parsed))
+    decimal_rate <- mean(grepl("\\.[0-9]{2}$", stripped))
+    money_char_rate <- mean(grepl("[$,()]", x_clean))
+    if (parse_rate >= 0.70 && (decimal_rate >= 0.50 || money_char_rate >= 0.10)) {
       return(list(usage = "money", format = MONEY_REGEXP))
     }
   }
@@ -158,7 +164,6 @@ build_layout <- function(df, raw_names) {
       intended_name = infer_column_name(raw_names[i]),
       usage         = uf$usage,
       format        = uf$format,
-      description   = "",
       required      = TRUE,
       stringsAsFactors = FALSE
     )
@@ -230,13 +235,14 @@ ui <- fluidPage(
       hr(),
 
       h3("2. Account Metadata"),
-      selectInput("account_type", "Account Type",
-        choices = c("(select)" = "", "Checking" = "Checking", "Credit Card" = "Credit Card")
-      ),
       textInput("account_id", "Account ID",
         placeholder = "e.g. Chase_Checking_1234"
       ),
       uiOutput("account_id_msg"),
+      selectInput("account_type", "Account Type",
+        choices = c("Checking" = "Checking", "Credit Card" = "Credit Card"),
+        selected = "Checking"
+      ),
       hr(),
 
       h3("3. Save Layout"),
@@ -282,7 +288,7 @@ ui <- fluidPage(
           helpText(
             "Usage: date, money, or text  |  ",
             "Format: lubridate string for dates, regexp for money  |  ",
-            "Intended Name and Description are free-text."
+            "Intended Name is free-text."
           ),
           DTOutput("layout_table"),
           br(),
@@ -341,12 +347,13 @@ server <- function(input, output, session) {
     }
   })
 
-  # Auto-set account_type from keywords in account_id
+  # Auto-set account_type from account_id: credit card if mc/visa, else checking
   observeEvent(input$account_id, {
+    req(nchar(trimws(input$account_id)) > 0)
     s <- tolower(input$account_id)
     if (grepl("visa|\\bmc\\b|mastercard|credit", s)) {
       updateSelectInput(session, "account_type", selected = "Credit Card")
-    } else if (grepl("chk|checking", s)) {
+    } else {
       updateSelectInput(session, "account_type", selected = "Checking")
     }
   })
@@ -442,10 +449,10 @@ server <- function(input, output, session) {
   output$layout_table <- renderDT({
     req(rv$layout)
 
-    display <- rv$layout[, c("original_name", "intended_name", "usage", "format", "description")]
-    names(display) <- c("Original Name", "Intended Name", "Usage", "Format", "Description")
+    display <- rv$layout[, c("original_name", "intended_name", "usage", "format")]
+    names(display) <- c("Original Name", "Intended Name", "Usage", "Format")
 
-    # Render required as HTML checkboxes
+    # Render required as HTML checkboxes (col index 4)
     display[["Required"]] <- ifelse(
       rv$layout$required,
       '<input type="checkbox" checked>',
@@ -456,18 +463,17 @@ server <- function(input, output, session) {
       display,
       rownames  = FALSE,
       escape    = FALSE,
-      editable  = list(target = "cell", disable = list(columns = c(0, 5))),
+      editable  = list(target = "cell", disable = list(columns = c(0, 4))),
       selection = "none",
       options   = list(
         pageLength = 25,
         dom        = "tp",
         columnDefs = list(
-          list(width = "140px", targets = 0),
-          list(width = "140px", targets = 1),
-          list(width = "80px",  targets = 2),
-          list(width = "180px", targets = 3),
-          list(width = "180px", targets = 4),
-          list(width = "70px",  targets = 5, className = "dt-center")
+          list(width = "150px", targets = 0),
+          list(width = "150px", targets = 1),
+          list(width = "90px",  targets = 2),
+          list(width = "250px", targets = 3),
+          list(width = "70px",  targets = 4, className = "dt-center")
         )
       )
     )
@@ -535,12 +541,21 @@ server <- function(input, output, session) {
     req(rv$layout)
 
     errors <- character(0)
-    if (!is_valid_id(input$source_system)) errors <- c(errors,
-      paste0("source_system '", input$source_system, "' is not a valid identifier (letters, digits, _ or . only; must not start with a digit)."))
-    if (!is_valid_id(input$account_id)) errors <- c(errors,
-      paste0("account_id '", input$account_id, "' is not a valid identifier (letters, digits, _ or . only; must not start with a digit)."))
-    if (!is_valid_id(input$layout_id)) errors <- c(errors,
-      paste0("layout_id '", input$layout_id, "' is not a valid identifier (letters, digits, _ or . only; must not start with a digit)."))
+    if (nchar(trimws(input$source_system)) == 0) {
+      errors <- c(errors, "Source System is required.")
+    } else if (!is_valid_id(input$source_system)) {
+      errors <- c(errors, paste0("source_system '", input$source_system, "' is not a valid identifier (letters, digits, _ or . only; must not start with a digit)."))
+    }
+    if (nchar(trimws(input$account_id)) == 0) {
+      errors <- c(errors, "Account ID is required.")
+    } else if (!is_valid_id(input$account_id)) {
+      errors <- c(errors, paste0("account_id '", input$account_id, "' is not a valid identifier (letters, digits, _ or . only; must not start with a digit)."))
+    }
+    if (nchar(trimws(input$layout_id)) == 0) {
+      errors <- c(errors, "Layout ID is required.")
+    } else if (!is_valid_id(input$layout_id)) {
+      errors <- c(errors, paste0("layout_id '", input$layout_id, "' is not a valid identifier (letters, digits, _ or . only; must not start with a digit)."))
+    }
 
     valid_to_val <- trimws(input$valid_to)
     if (nchar(valid_to_val) > 0) {
