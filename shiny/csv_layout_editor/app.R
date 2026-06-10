@@ -606,7 +606,7 @@ server <- function(input, output, session) {
 
     # layout.csv
     upsert_csv(
-      file.path(out_dir, "layout.csv"),
+      file.path(out_dir, "layouts.csv"),
       data.frame(
         source_system     = ss,
         account_id        = ai,
@@ -620,7 +620,7 @@ server <- function(input, output, session) {
 
     # account.csv
     upsert_csv(
-      file.path(out_dir, "account.csv"),
+      file.path(out_dir, "accounts.csv"),
       data.frame(
         source_system = ss,
         account_id    = ai,
@@ -632,7 +632,7 @@ server <- function(input, output, session) {
       key_cols = c("source_system", "account_id")
     )
 
-    saved_files <- c("layout_cols.csv", "layout.csv", "account.csv")
+    saved_files <- c("layout_cols.csv", "layouts.csv", "accounts.csv")
     code_style  <- "background:#e8f4fb; color:#1a6a9a; border:none; padding:2px 4px;"
     output$save_msg <- renderUI({
       tags$div(style = "color: #27ae60;",
