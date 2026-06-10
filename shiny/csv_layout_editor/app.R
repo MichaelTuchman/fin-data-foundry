@@ -557,15 +557,16 @@ server <- function(input, output, session) {
     vf  <- as.character(input$valid_from)
     vt  <- if (nchar(valid_to_val) > 0) valid_to_val else NA_character_
 
-    # layout_cols.csv -- excluded columns are omitted
-    included <- rv$layout[!rv$layout$excluded, ]
+    # layout_cols.csv -- excluded columns are omitted; column_number reflects original position
+    incl_idx  <- which(!rv$layout$excluded)
+    included  <- rv$layout[incl_idx, ]
     upsert_csv(
       file.path(out_dir, "layout_cols.csv"),
       data.frame(
         source_system = ss,
         account_id    = ai,
         layout_id     = lid,
-        column_number = seq_len(nrow(included)),
+        column_number = incl_idx,
         usage_type    = included$usage,
         format        = included$format,
         original_name = included$original_name,
