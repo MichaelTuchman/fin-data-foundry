@@ -357,7 +357,7 @@ ui <- fluidPage(
         ),
 
         wellPanel(
-          h3("Data Preview (first 10 rows)"),
+          h3("Data Preview"),
           div(style = "overflow-x:auto;",
             DTOutput("data_preview")
           )
@@ -606,14 +606,19 @@ server <- function(input, output, session) {
   # Data preview -- grey out non-required columns
   output$data_preview <- renderDT({
     req(rv$raw_df, rv$layout)
-    df <- head(rv$raw_df, 10)
-    dt <- datatable(df,
+    dt <- datatable(rv$raw_df,
       rownames  = FALSE,
       selection = "none",
-      options   = list(dom = "t", scrollX = TRUE, pageLength = 10, ordering = FALSE)
+      options   = list(
+        dom        = "ltp",
+        scrollX    = TRUE,
+        pageLength = 10,
+        lengthMenu = c(10, 25, 50, 100),
+        ordering   = FALSE
+      )
     )
     not_required <- rv$layout$original_name[!rv$layout$required]
-    cols_to_grey <- intersect(not_required, names(df))
+    cols_to_grey <- intersect(not_required, names(rv$raw_df))
     if (length(cols_to_grey) > 0) {
       dt <- formatStyle(dt, cols_to_grey,
         backgroundColor = "#ebebeb", color = "#aaaaaa")
