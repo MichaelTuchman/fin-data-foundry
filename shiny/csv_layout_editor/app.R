@@ -27,13 +27,12 @@ dir_roots <- c(
 read_csv_safe <- function(path, header, sep, skip) {
   # Pre-check: if header has fewer fields than the first data row, read.csv
   # would silently treat column 1 as row names and error on duplicates.
+  # count.fields() is quote-aware so commas inside quoted values don't inflate the count.
   if (header) {
-    raw <- readLines(path, warn = FALSE)
-    raw <- raw[nchar(trimws(raw)) > 0]  # skip blank lines
-    if (length(raw) >= skip + 2) {
-      count_fields <- function(line) length(strsplit(line, sep, fixed = TRUE)[[1]])
-      n_header <- count_fields(raw[skip + 1])
-      n_data   <- count_fields(raw[skip + 2])
+    field_counts <- count.fields(path, sep = sep, skip = skip, blank.lines.skip = TRUE)
+    if (length(field_counts) >= 2) {
+      n_header <- field_counts[1]
+      n_data   <- field_counts[2]
       if (n_data > n_header)
         stop("CSV has fewer column headers (", n_header, ") than data columns (", n_data, ").")
     }
