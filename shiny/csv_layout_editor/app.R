@@ -48,7 +48,19 @@ read_csv_safe <- function(path, header, sep, skip) {
     df <- do.call(read.csv, args)
     attr(df, "requoted") <- TRUE
   }
+  # Drop blank lines (rows where every field is NA or empty string)
+  blank <- apply(df, 1, function(row) all(is.na(row) | trimws(row) == ""))
+  df <- df[!blank, , drop = FALSE]
   df
+}
+
+# Returns a data frame of duplicate rows with an added Row column (1-based, blank lines excluded).
+find_duplicates <- function(df) {
+  dupe_mask <- duplicated(df) | duplicated(df, fromLast = TRUE)
+  if (!any(dupe_mask)) return(NULL)
+  result <- df[dupe_mask, , drop = FALSE]
+  result <- cbind(Row = which(dupe_mask), result)
+  result
 }
 
 # --------------------------------------------------------------------------
@@ -443,6 +455,18 @@ server <- function(input, output, session) {
       rv$raw_names <- colnames(df)
       rv$layout    <- build_layout(df, colnames(df))
 
+      dupes <- find_duplicates(df)
+      if (!is.null(dupes)) {
+        showModal(modalDialog(
+          title   = paste0("Duplicate rows detected (", nrow(dupes), " rows)"),
+          size    = "l",
+          easyClose = TRUE,
+          footer  = modalButton("Dismiss"),
+          div(style = "overflow-x:auto;",
+            renderTable(dupes, striped = TRUE, hover = TRUE, bordered = TRUE))
+        ))
+      }
+
       parsed <- parse_filename(input$csv_file$name)
       if (!is.null(parsed)) {
         updateTextInput(session, "source_system", value = parsed$source_system)
@@ -471,6 +495,20 @@ server <- function(input, output, session) {
       rv$raw_df    <- df
       rv$raw_names <- colnames(df)
       rv$layout    <- build_layout(df, colnames(df))
+
+      dupes <- find_duplicates(df)
+      if (!is.null(dupes)) {
+        showModal(modalDialog(
+          title   = paste0("Duplicate rows detected (", nrow(dupes), " rows)"),
+          size    = "l",
+          easyClose = TRUE,
+          footer  = modalButton("Dismiss"),
+          div(style = "overflow-x:auto;",
+            renderTable(dupes, striped = TRUE, hover = TRUE, bordered = TRUE))
+        ))
+      } else {
+        showNotification("File reloaded.", type = "message")
+      }
     }, error = function(e) {
       showNotification(paste("Error reading file:", e$message),
         type = "error", duration = 8)
