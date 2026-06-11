@@ -113,8 +113,9 @@ detect_skip_rows <- function(filepath, sep = ",", n_scan = 30) {
 }
 
 # --------------------------------------------------------------------------
-# Usage inference
-# Values: "date", "money", "text"
+# Validation inference
+# Returns validation_type: "date_format" | "regex" | ""
+#         validation_rule: format string, regexp, or ""
 # --------------------------------------------------------------------------
 
 DATE_SPECS <- list(
@@ -142,14 +143,14 @@ money_regexp_for <- function(x_clean) {
   "^-?[0-9]+(\\.[0-9]{2})?$"
 }
 
-infer_usage_and_format <- function(x, col_name = "") {
+infer_validation <- function(x, col_name = "") {
   x_clean <- x[!is.na(x) & trimws(x) != ""]
 
   # 1. Date: pattern match on values
   if (length(x_clean) > 0) {
     for (ds in DATE_SPECS) {
       if (mean(grepl(ds$regexp, x_clean)) >= 0.70) {
-        return(list(usage = "date", format = ds$fmt))
+        return(list(validation_type = "date_format", validation_rule = ds$fmt))
       }
     }
   }
@@ -165,17 +166,17 @@ infer_usage_and_format <- function(x, col_name = "") {
     decimal_rate    <- mean(grepl("\\.[0-9]{2}$", stripped))
     money_char_rate <- mean(grepl("[$,()]", x_clean))
     if (parse_rate >= 0.70 && (decimal_rate >= 0.50 || money_char_rate >= 0.10)) {
-      return(list(usage = "money", format = money_regexp_for(x_clean)))
+      return(list(validation_type = "regex", validation_rule = money_regexp_for(x_clean)))
     }
   }
 
   # 3. Date fallback: column name contains "date"
   if (grepl("date", col_name, ignore.case = TRUE)) {
-    return(list(usage = "date", format = ""))
+    return(list(validation_type = "date_format", validation_rule = ""))
   }
 
-  # 4. Default: text
-  list(usage = "text", format = "")
+  # 4. Default: text, no rule
+  list(validation_type = "", validation_rule = "")
 }
 
 infer_column_name <- function(raw_name) {
@@ -196,13 +197,13 @@ build_layout <- function(df, raw_names) {
   raw_names <- fix_colnames(raw_names)
   rows <- lapply(seq_along(raw_names), function(i) {
     col_data <- as.character(df[[i]])
-    uf       <- infer_usage_and_format(col_data, raw_names[i])
+    vf       <- infer_validation(col_data, raw_names[i])
     data.frame(
-      original_name = raw_names[i],
-      intended_name = infer_column_name(raw_names[i]),
-      usage         = uf$usage,
-      format        = uf$format,
-      required      = TRUE,
+      original_name   = raw_names[i],
+      intended_name   = infer_column_name(raw_names[i]),
+      validation_type = vf$validation_type,
+      validation_rule = vf$validation_rule,
+      required        = TRUE,
       stringsAsFactors = FALSE
     )
   })
@@ -344,8 +345,8 @@ ui <- fluidPage(
         wellPanel(
           h3("Column Layout -- edit cells directly; uncheck Required to omit a column"),
           helpText(
-            "Usage: date, money, or text  |  ",
-            "Format: lubridate string for dates, regexp for money  |  ",
+            "Validation Type: date_format, regex, or blank  |  ",
+            "Validation Rule: strptime string for dates, regexp for money, or blank  |  ",
             "Intended Name is free-text."
           ),
           DTOutput("layout_table"),
@@ -539,8 +540,8 @@ server <- function(input, output, session) {
   output$layout_table <- renderDT({
     req(rv$layout)
 
-    display <- rv$layout[, c("original_name", "intended_name", "usage", "format")]
-    names(display) <- c("Original Name", "Intended Name", "Usage", "Format")
+    display <- rv$layout[, c("original_name", "intended_name", "validation_type", "validation_rule")]
+    names(display) <- c("Original Name", "Intended Name", "Validation Type", "Validation Rule")
 
     # Render required as HTML checkboxes (col index 4)
     display[["Required"]] <- ifelse(
@@ -561,14 +562,14 @@ server <- function(input, output, session) {
         columnDefs = list(
           list(width = "150px", targets = 0),
           list(width = "150px", targets = 1),
-          list(width = "90px",  targets = 2),
+          list(width = "100px", targets = 2),
           list(width = "250px", targets = 3),
           list(width = "70px",  targets = 4, className = "dt-center")
         )
       )
     )
-    dt <- formatStyle(dt, "Usage",
-      color = styleEqual(c("money", "date"), c("#8e44ad", "#c0392b")))
+    dt <- formatStyle(dt, "Validation Type",
+      color = styleEqual(c("date_format", "regex"), c("#c0392b", "#8e44ad")))
     dt <- formatStyle(dt, "Required",
       target = "row",
       backgroundColor = styleEqual(c(
@@ -677,13 +678,14 @@ server <- function(input, output, session) {
       n_cols <- upsert_csv(
         file.path(out_dir, "layout_cols.csv"),
         data.frame(
-          source_system    = ss,
-          account_id       = ai,
-          layout_id        = lid,
-          column_position  = seq_len(nrow(rv$layout)),
-          canonical_field  = rv$layout$intended_name,
-          expected_pattern = rv$layout$format,
-          required         = ifelse(rv$layout$required, "True", "False"),
+          source_system   = ss,
+          account_id      = ai,
+          layout_id       = lid,
+          column_position = seq_len(nrow(rv$layout)),
+          canonical_field = rv$layout$intended_name,
+          validation_type = rv$layout$validation_type,
+          validation_rule = rv$layout$validation_rule,
+          required        = ifelse(rv$layout$required, "True", "False"),
           stringsAsFactors = FALSE
         ),
         key_cols = c("source_system", "account_id", "layout_id", "column_position")
