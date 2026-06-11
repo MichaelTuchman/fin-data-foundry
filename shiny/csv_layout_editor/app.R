@@ -30,6 +30,7 @@ read_csv_safe <- function(path, header, sep, skip) {
     header           = header,
     sep              = sep,
     skip             = skip,
+    row.names        = NULL,
     stringsAsFactors = FALSE,
     check.names      = FALSE
   )
