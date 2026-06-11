@@ -25,12 +25,25 @@ dir_roots <- c(
 # Read CSV with automatic retry on unmatched-quote warning.
 # --------------------------------------------------------------------------
 read_csv_safe <- function(path, header, sep, skip) {
+  # Pre-check: if header has fewer fields than the first data row, read.csv
+  # would silently treat column 1 as row names and error on duplicates.
+  if (header) {
+    raw <- readLines(path, warn = FALSE)
+    raw <- raw[nchar(trimws(raw)) > 0]  # skip blank lines
+    if (length(raw) >= skip + 2) {
+      count_fields <- function(line) length(strsplit(line, sep, fixed = TRUE)[[1]])
+      n_header <- count_fields(raw[skip + 1])
+      n_data   <- count_fields(raw[skip + 2])
+      if (n_data > n_header)
+        stop("CSV has fewer column headers (", n_header, ") than data columns (", n_data, ").")
+    }
+  }
+
   args <- list(
     file             = path,
     header           = header,
     sep              = sep,
     skip             = skip,
-    row.names        = NULL,
     stringsAsFactors = FALSE,
     check.names      = FALSE
   )
