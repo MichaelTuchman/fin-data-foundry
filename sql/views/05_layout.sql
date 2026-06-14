@@ -23,7 +23,7 @@ inner join finances.metadata_layout_controls mlc
   on fc.source_system = mlc.source_system
  and fc.account_id = mlc.account_id
  and fc.file_start_dt >= try_cast(mlc.layout_valid_from as date)
- and fc.file_end_dt <= coalesce(
-      try_cast(nullif(mlc.layout_valid_to, '') as date),
-      current_date
+and (
+      trim(coalesce(mlc.layout_valid_to, '')) = ''
+      or fc.file_end_dt <= try_cast(mlc.layout_valid_to as date)
     )
