@@ -1,63 +1,55 @@
 # Finance Foundry
 
-A framework for harmonizing financial data across multiple institutions and over time, with full row-level traceability and validation at every transformation stage.
+A metadata-driven framework for normalizing inconsistent financial transaction data across multiple institutions and over time.
 
 ## Why this exists
 
-Financial data is difficult for two compounding reasons:
+Financial data is inconsistent in two fundamental ways:
 
-### 1. Multiple sources disagree
+### 1. Across sources
 
-Different banks, brokers, and financial systems:
+Different banks and financial institutions:
 
-- Use different file formats
-- Change layouts over time
-- Encode account identity differently
-- Represent the same concept in inconsistent ways
+- Use different CSV formats
+- Change column layouts over time
+- Represent the same concepts differently
+- Do not share a common schema
 
-### 2. A single source is not stable over time
+### 2. Over time within a single source
 
-Even within one institution:
+Even a single institution is not stable:
 
-- File structures evolve without warning
-- Historical “catch-up” files appear later
+- Export formats evolve
 - Columns are added, removed, or reordered
-- Semantics drift subtly across time periods
+- Historical “catch-up” files appear later
+- Schema assumptions silently break
 
-The result is a simple but painful question:
+This leads to a recurring failure mode:
 
-> **“Do these numbers actually represent the same thing across sources and time?”**
+> “The data loads successfully, but I don’t trust the result — and I can’t explain why.”
 
-And an even worse one:
-
-> **“Where did my rows go?”**
-
-Finance Foundry exists to make those questions answerable.
+Finance Foundry exists to eliminate that uncertainty.
 
 ---
 
-## What this system guarantees
+## What this system does
 
-At its core, the system ensures:
+Finance Foundry separates:
 
-> Every row from every source can be traced through every transformation stage, without silent loss or ambiguity.
+- **data ingestion** (preserve raw structure)
+- **data interpretation** (apply metadata-driven rules)
 
----
+Raw files are never modified. Instead, metadata defines how they are transformed into a canonical transaction model.
 
-## Core design principle
-
-> Data must be consistent across sources, and consistent across time.
-
-This system enforces that by making:
-
-- Source differences explicit
-- Temporal changes first-class
-- Transformations fully traceable
-- Row preservation measurable at every stage
+This allows inconsistent financial data to be normalized without per-source ETL logic.
 
 ---
 
-## Pipeline overview
+## Core principle
+
+> All transformations must be traceable, and no row may disappear without explanation.
+
+This is enforced through a staged pipeline:
 
 ```
 raw_csv
@@ -69,43 +61,115 @@ raw_csv
   → trans_analy
 ```
 
-Each stage progressively resolves ambiguity:
-
-- **file_context**  
-  Identifies source system, account, and file time coverage
-
-- **layout_match**  
-  Resolves which schema applies at that point in time
-
-- **canon_long**  
-  Normalizes heterogeneous inputs into a consistent event model
-
-- **canon_wide**  
-  Produces analysis-ready structure
-
-- **trans_analy**  
-  Final typed dataset for downstream analysis
+Each stage is designed to make failures visible rather than hidden.
 
 ---
 
-## What makes this different
+## System guarantees
 
-Most systems assume the hardest problem is transformation.
-
-This system assumes the hardest problem is:
-
-> **establishing that all data refers to the same conceptual reality across time and source systems**
-
-Transformation is secondary. Reconciliation is primary.
+- Row preservation across all transformation stages
+- Explicit file identity and time coverage resolution
+- Metadata-driven schema selection (no hardcoded parsing logic per bank)
+- Deterministic transformations
+- Observable failure points at each stage
 
 ---
 
-## When to use this
+## Use cases
 
-Use Finance Foundry when:
+This system is designed for working with inconsistent financial data across multiple sources and over time.
 
-- You are ingesting financial data from multiple institutions
-- File formats evolve over time
-- Historical data must remain comparable
-- Silent data loss is unacceptable
-- Auditability and traceability matter
+Even within a single institution, formats evolve continuously.
+
+### Personal Finance Aggregation
+
+Combine transaction exports from multiple banks:
+
+- Wells Fargo, Chase, Amex, etc.
+- Inconsistent formats and column layouts
+- Output: a single unified transaction table
+
+---
+
+### Financial Analysis & Reporting
+
+Prepare structured datasets for:
+
+- spending analysis
+- budgeting and reconciliation
+- BI dashboards and analytics tools
+
+Instead of manual cleaning, structure is defined once in metadata.
+
+---
+
+### Schema-on-Read Data Engineering
+
+Support evolving file formats without rewriting pipelines:
+
+- multiple layouts per source system
+- schema changes over time
+- no per-bank ETL code paths
+
+Works well with:
+
+- AWS Athena / Trino / Presto
+- data lake architectures
+
+---
+
+### Fintech Prototyping
+
+Build financial tools without API dependencies:
+
+- ingest exported bank data directly
+- normalize into a canonical schema
+- rapidly prototype analytics and aggregation systems
+
+---
+
+### Evolving Data Formats
+
+Banks frequently change export formats.
+
+Finance Foundry handles this by:
+
+- supporting multiple layouts per source
+- applying effective-date-based schema selection
+- preserving backward compatibility
+
+---
+
+## Design influences
+
+This system is influenced by principles from:
+
+- clinical programming (traceability of derived values)
+- actuarial modeling (conservation of quantities across transformations)
+
+These domains share a common requirement:
+
+> transformations must be explainable, auditable, and reproducible.
+
+---
+
+## Current implementation
+
+The reference implementation uses:
+
+- AWS S3 for storage
+- AWS Athena for query execution
+- SQL-based metadata-driven transformations
+
+The architecture is platform-agnostic and can be adapted to other environments.
+
+---
+
+## Future directions
+
+Potential extensions include:
+
+- merchant classification
+- transaction categorization
+- data enrichment layers
+- reconciliation across accounts and institutions
