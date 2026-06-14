@@ -1,113 +1,111 @@
-# fin-data-foundry
+# Finance Foundry
 
-Metadata-driven framework for **normalizing inconsistent bank CSV data into a unified transaction model**.
+A framework for harmonizing financial data across multiple institutions and over time, with full row-level traceability and validation at every transformation stage.
 
-Most banks export transaction data differently—and often change formats over time.  
-As a result, combining or analyzing data across accounts becomes manual, fragile, and time-consuming.
+## Why this exists
 
-**fin-data-foundry** solves this by separating *data ingestion* from *data interpretation*.  
-Raw CSV files are ingested as-is, and metadata defines how each format should be transformed into a standardized schema.
+Financial data is difficult for two compounding reasons:
 
-The name *foundry* is intentional:
+### 1. Multiple sources disagree
 
-> A foundry transforms raw, unrefined material into consistent, usable forms.
+Different banks, brokers, and financial systems:
 
-This system applies the same idea to financial data—casting heterogeneous inputs into a single, queryable transaction dataset.
+- Use different file formats
+- Change layouts over time
+- Encode account identity differently
+- Represent the same concept in inconsistent ways
 
-It enables normalization of bank CSV data, standardization of financial transactions, and metadata-driven ingestion using SQL and AWS Athena.
+### 2. A single source is not stable over time
 
-This approach moves beyond traditional data pipelines. By using metadata to define structure, the system acts as an early form of **assisted data modeling**—helping transform inconsistent inputs into a consistent, queryable schema with minimal manual effort.
+Even within one institution:
 
----
+- File structures evolve without warning
+- Historical “catch-up” files appear later
+- Columns are added, removed, or reordered
+- Semantics drift subtly across time periods
 
-## ⚠️ Current Implementation
+The result is a simple but painful question:
 
-The reference implementation in this repository is developed and tested on AWS (S3 + Athena).
+> **“Do these numbers actually represent the same thing across sources and time?”**
 
-The overall approach is platform-agnostic and can be adapted to other environments (e.g., Azure, GCP, or local SQL engines), but those implementations are not yet provided.
+And an even worse one:
 
----
+> **“Where did my rows go?”**
 
-# 🧩 Use Cases
-
-This project is designed for anyone dealing with inconsistent financial data across multiple sources.  Even within the same bank, formats often change over time.
-
-## 🏦 Personal Finance Aggregation
-
-Combine transaction exports from multiple banks into a single dataset:
-
-- Wells Fargo, Chase, Amex, etc.
-- Different formats, column orders, and naming conventions
-- Output: one consistent transaction table for analysis
+Finance Foundry exists to make those questions answerable.
 
 ---
 
-## 📊 Financial Analysis & Reporting
+## What this system guarantees
 
-Prepare clean, structured data for:
+At its core, the system ensures:
 
-- spending analysis
-- budgeting tools
-- dashboards (Athena, BI tools, etc.)
-
-Instead of manually cleaning each CSV, define the structure once in metadata.
+> Every row from every source can be traced through every transformation stage, without silent loss or ambiguity.
 
 ---
 
-## ⚙️ Data Engineering (Schema-on-Read)
+## Core design principle
 
-Handle multiple CSV formats without rewriting pipelines:
+> Data must be consistent across sources, and consistent across time.
 
-- Different layouts over time
-- Multiple schemas in a single directory
-- No per-source ETL logic
+This system enforces that by making:
 
-This is especially useful for:
-- AWS Athena / Presto / Trino workflows
-- Data lakes with evolving schemas
-
----
-
-## 🏗️ Fintech Prototyping
-
-Build financial products without relying on APIs:
-
-- Ingest exported bank data instead of API integrations
-- Normalize into a common schema
-- Prototype aggregation and analytics features quickly
+- Source differences explicit
+- Temporal changes first-class
+- Transformations fully traceable
+- Row preservation measurable at every stage
 
 ---
 
-## 🔁 Evolving Data Formats
+## Pipeline overview
 
-Banks frequently change their export formats.
+```
+raw_csv
+  → raw_boundary
+  → file_context
+  → layout_match
+  → canon_long
+  → canon_wide
+  → trans_analy
+```
 
-This system:
-- supports multiple layouts per source
-- uses effective dates to apply the correct schema
-- avoids breaking existing pipelines
+Each stage progressively resolves ambiguity:
 
----
-## 🔮 Future Directions
+- **file_context**  
+  Identifies source system, account, and file time coverage
 
-This framework focuses on standardizing raw financial transaction data.
+- **layout_match**  
+  Resolves which schema applies at that point in time
 
-A natural extension is higher-level interpretation, such as:
+- **canon_long**  
+  Normalizes heterogeneous inputs into a consistent event model
 
-- merchant identification
-- transaction categorization
-- enrichment of normalized data
+- **canon_wide**  
+  Produces analysis-ready structure
 
-Early prototypes of these capabilities exist, but are not yet part of this repository.
-
-# 📚 Documentation
-
-Detailed setup, architecture, and usage instructions are available in the project Wiki (ready 5/12/26)
-
-👉 [Project Wiki](../../wiki)
-
-Hardcoded S3 bucket names currently exist.
-This is known and accepted.
+- **trans_analy**  
+  Final typed dataset for downstream analysis
 
 ---
 
+## What makes this different
+
+Most systems assume the hardest problem is transformation.
+
+This system assumes the hardest problem is:
+
+> **establishing that all data refers to the same conceptual reality across time and source systems**
+
+Transformation is secondary. Reconciliation is primary.
+
+---
+
+## When to use this
+
+Use Finance Foundry when:
+
+- You are ingesting financial data from multiple institutions
+- File formats evolve over time
+- Historical data must remain comparable
+- Silent data loss is unacceptable
+- Auditability and traceability matter
