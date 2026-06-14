@@ -12,3 +12,4 @@ SELECT
     col09,
     col10
 FROM raw_csv
+
