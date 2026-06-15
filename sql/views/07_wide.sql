@@ -26,17 +26,52 @@ SELECT
     cl.layout_id,
     cl.derived_row_serial,
 
-    MAX(CASE WHEN lower(cl.canonical_field) = 'transaction_date' THEN cl.raw_value END) AS transaction_date,
-    MAX(CASE WHEN lower(cl.canonical_field) = 'description' THEN cl.raw_value END) AS description,
-    MAX(CASE WHEN lower(cl.canonical_field) = 'amount' THEN cl.raw_value END) AS amount,
+    MAX(CASE
+        WHEN lower(cl.canonical_field) = 'transaction_date'
+        THEN cl.raw_value
+    END) AS transaction_date,
+
+    MAX(CASE
+        WHEN lower(cl.canonical_field) = 'description'
+        THEN cl.raw_value
+    END) AS description,
 
     MAX(CASE
         WHEN lower(cl.canonical_field) = 'amount'
-        THEN TRY_CAST(cl.normalized_money_value AS decimal(18,2))
+        THEN cl.raw_value
+    END) AS amount,
+
+    MAX(CASE
+        WHEN lower(cl.canonical_field) = 'amount'
+        THEN TRY_CAST(
+            CASE
+                WHEN cl.raw_value IS NULL OR trim(cl.raw_value) = '' THEN NULL
+                WHEN regexp_like(trim(cl.raw_value), '^[(].*[)]$') THEN
+                    '-' || regexp_replace(
+                        regexp_replace(trim(cl.raw_value), '[^0-9.,-]', ''),
+                        ',',
+                        ''
+                    )
+                ELSE
+                    regexp_replace(
+                        regexp_replace(trim(cl.raw_value), '[^0-9.,-]', ''),
+                        ',',
+                        ''
+                    )
+            END
+            AS decimal(18,2)
+        )
     END) AS amount_d,
 
-    MAX(CASE WHEN lower(cl.canonical_field) = 'check_number' THEN cl.raw_value END) AS check_number,
-    MAX(CASE WHEN lower(cl.canonical_field) = 'status' THEN cl.raw_value END) AS status
+    MAX(CASE
+        WHEN lower(cl.canonical_field) = 'check_number'
+        THEN cl.raw_value
+    END) AS check_number,
+
+    MAX(CASE
+        WHEN lower(cl.canonical_field) = 'status'
+        THEN cl.raw_value
+    END) AS status
 
 FROM finances.canon_long cl
 JOIN valid_rows vr
