@@ -31,11 +31,11 @@ Many financial data projects eventually run into the same questions:
 
 > Which transformation changed this value?
 
-Traditional pipelines often focus on producing outputs.
+Traditional pipelines often focus *merely* on producing outputs.
 
-Finance Foundry focuses on producing outputs that remain explainable.
+Finance Foundry focuses on producing outputs that remain _explainable_.
 
-The goal is not simply to transform data, but to make every transformation traceable, observable, and reproducible.
+The goal is not simply to **transform data**, but to make every change traceable, observable, and reproducible.
 
 ---
 
