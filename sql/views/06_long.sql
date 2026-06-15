@@ -37,9 +37,9 @@ joined as (
         r.derived_row_serial,
         r.column_position,
         c.canonical_field,
-        c.validation_type,
-        c.validation_rule,
-        c.required,
+        lower(trim(c.validation_type)) as validation_type,
+        lower(trim(c.validation_rule)) as validation_rule,
+        lower(trim(c.required)) as required,
         r.raw_value
     from raw_long r
     join finances.metadata_layout_cols c
@@ -98,26 +98,26 @@ select
     raw_value,
     case
         when raw_value is null or trim(raw_value) = '' then
-            not coalesce(required, false)
+            not (required = 'true')
 
-        when lower(validation_type) = 'text' then
+        when validation_type = 'text' then
             true
 
-        when lower(validation_type) = 'regex' then
+        when validation_type = 'regex' then
             regexp_like(trim(raw_value), validation_rule)
 
-        when lower(validation_type) = 'money' then
+        when validation_type = 'money' then
             try_cast(normalized_money_value as decimal(18,2)) is not null
 
-        when lower(validation_type) = 'date_format'
-             and lower(validation_rule) = 'iso_8601' then
+        when validation_type = 'date_format'
+             and validation_rule = 'iso_8601' then
             try_cast(trim(raw_value) as date) is not null
 
-        when lower(validation_type) = 'date_format'
-             and lower(validation_rule) = 'mdy_slash' then
+        when validation_type = 'date_format'
+             and validation_rule = 'mdy_slash' then
             try(date_parse(trim(raw_value), '%m/%d/%Y')) is not null
 
-        when lower(validation_type) = 'date_format' then
+        when validation_type = 'date_format' then
             try(date_parse(trim(raw_value), validation_rule)) is not null
 
         else
