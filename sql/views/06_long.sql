@@ -9,21 +9,21 @@ with raw_long as (
         lm.file_end_dt,
         lm.layout_id,
         lm.derived_row_serial,
-        u.column_position,
-        u.raw_value
+        cast(u.column_pair[1] as integer) as column_position,
+        u.column_pair[2] as raw_value
     from finances.layout_match lm
     cross join unnest(array[
-        row(1, lm.col01),
-        row(2, lm.col02),
-        row(3, lm.col03),
-        row(4, lm.col04),
-        row(5, lm.col05),
-        row(6, lm.col06),
-        row(7, lm.col07),
-        row(8, lm.col08),
-        row(9, lm.col09),
-        row(10, lm.col10)
-    ]) as u(column_position, raw_value)
+        array['1', lm.col01],
+        array['2', lm.col02],
+        array['3', lm.col03],
+        array['4', lm.col04],
+        array['5', lm.col05],
+        array['6', lm.col06],
+        array['7', lm.col07],
+        array['8', lm.col08],
+        array['9', lm.col09],
+        array['10', lm.col10]
+    ]) as u(column_pair)
 ),
 joined as (
     select
@@ -46,7 +46,7 @@ joined as (
       on r.source_system = c.source_system
      and r.account_id = c.account_id
      and r.layout_id = c.layout_id
-     and r.column_position = c.column_position
+     and r.column_position = try_cast(c.column_position as integer)
 ),
 normalized as (
     select
@@ -66,17 +66,18 @@ normalized as (
         raw_value,
         case
             when raw_value is null or trim(raw_value) = '' then null
-            when regexp_like(trim(raw_value), '^[(].*[)]$')
-                then '-' || regexp_replace(
+            when regexp_like(trim(raw_value), '^[(].*[)]$') then
+                '-' || regexp_replace(
                     regexp_replace(trim(raw_value), '[^0-9.,-]', ''),
                     ',',
                     ''
                 )
-            else regexp_replace(
-                regexp_replace(trim(raw_value), '[^0-9.,-]', ''),
-                ',',
-                ''
-            )
+            else
+                regexp_replace(
+                    regexp_replace(trim(raw_value), '[^0-9.,-]', ''),
+                    ',',
+                    ''
+                )
         end as normalized_money_value
     from joined
 )
