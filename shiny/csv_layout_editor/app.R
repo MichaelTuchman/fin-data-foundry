@@ -29,7 +29,7 @@ read_csv_safe <- function(path, header, sep, skip) {
   # would silently treat column 1 as row names and error on duplicates.
   # count.fields() is quote-aware so commas inside quoted values don't inflate the count.
   if (header) {
-    field_counts <- count.fields(path, sep = sep, skip = skip, blank.lines.skip = TRUE)
+    field_counts <- count.fields(path, sep = sep, skip = skip, blank.lines.skip = TRUE, comment.char = "")
     if (length(field_counts) >= 2) {
       n_header <- field_counts[1]
       n_data   <- field_counts[2]
@@ -43,6 +43,7 @@ read_csv_safe <- function(path, header, sep, skip) {
     header           = header,
     sep              = sep,
     skip             = skip,
+    comment.char     = "",
     stringsAsFactors = FALSE,
     check.names      = FALSE
   )
