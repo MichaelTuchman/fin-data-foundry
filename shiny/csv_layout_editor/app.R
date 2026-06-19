@@ -211,39 +211,29 @@ build_layout <- function(df, raw_names) {
 }
 
 # --------------------------------------------------------------------------
-# File helpers: append rows and deduplicate on key columns
+# File helpers
 # --------------------------------------------------------------------------
 
-# Returns nrow of the final file, or stops with an informative message on error.
-upsert_csv <- function(filepath, new_rows, key_cols) {
-  if (file.exists(filepath)) {
-    existing <- tryCatch(
-      read.csv(filepath, stringsAsFactors = FALSE, check.names = FALSE),
-      error = function(e) stop("Could not read ", basename(filepath), ": ", e$message)
-    )
-    message("upsert ", basename(filepath), ": existing=", nrow(existing),
-            " new=", nrow(new_rows),
-            " existing_cols=", paste(names(existing), collapse=","),
-            " new_cols=", paste(names(new_rows), collapse=","))
-    all_cols <- union(names(existing), names(new_rows))
-    for (col in setdiff(all_cols, names(existing))) existing[[col]] <- NA
-    for (col in setdiff(all_cols, names(new_rows))) new_rows[[col]] <- NA
-    existing <- existing[, all_cols, drop = FALSE]
-    new_rows <- new_rows[, all_cols, drop = FALSE]
-    combined <- rbind(existing, new_rows)
-    key_vals <- do.call(paste, c(combined[, key_cols, drop = FALSE], sep = "||"))
-    combined <- combined[!duplicated(key_vals, fromLast = TRUE), ]
-    message("upsert ", basename(filepath), ": combined=", nrow(combined))
-  } else {
-    combined <- new_rows
-  }
-  quote_cols <- which(names(combined) == "expected_pattern")
+# If filepath already exists, return a timestamped variant; otherwise return as-is.
+versioned_path <- function(filepath) {
+  if (!file.exists(filepath)) return(filepath)
+  base  <- tools::file_path_sans_ext(filepath)
+  ext   <- tools::file_ext(filepath)
+  stamp <- format(Sys.time(), "%Y%m%d_%H%M%S")
+  paste0(base, "_", stamp, ".", ext)
+}
+
+# Write df to a fresh file (versioned if needed). Returns the actual path written.
+# validation_rule column is quoted to protect commas in regexp patterns.
+write_csv_fresh <- function(filepath, df) {
+  path <- versioned_path(filepath)
+  quote_cols <- which(names(df) == "validation_rule")
   tryCatch(
-    write.table(combined, file = filepath, sep = ",", row.names = FALSE,
+    write.table(df, file = path, sep = ",", row.names = FALSE,
                 col.names = TRUE, quote = if (length(quote_cols) > 0) quote_cols else FALSE),
-    error = function(e) stop("Could not write ", basename(filepath), ": ", e$message)
+    error = function(e) stop("Could not write ", basename(path), ": ", e$message)
   )
-  nrow(combined)
+  path
 }
 
 # --------------------------------------------------------------------------
@@ -680,7 +670,7 @@ server <- function(input, output, session) {
 
     result <- tryCatch({
 
-      n_cols <- upsert_csv(
+      p_cols <- write_csv_fresh(
         file.path(out_dir, "layout_cols.csv"),
         data.frame(
           source_system   = ss,
@@ -692,11 +682,10 @@ server <- function(input, output, session) {
           validation_rule = rv$layout$validation_rule,
           required        = ifelse(rv$layout$required, "True", "False"),
           stringsAsFactors = FALSE
-        ),
-        key_cols = c("source_system", "account_id", "layout_id", "column_position")
+        )
       )
 
-      n_layouts <- upsert_csv(
+      p_layouts <- write_csv_fresh(
         file.path(out_dir, "layouts.csv"),
         data.frame(
           source_system     = ss,
@@ -705,11 +694,10 @@ server <- function(input, output, session) {
           layout_valid_from = vf,
           layout_valid_to   = vt,
           stringsAsFactors  = FALSE
-        ),
-        key_cols = c("source_system", "account_id", "layout_id")
+        )
       )
 
-      n_accounts <- upsert_csv(
+      p_accounts <- write_csv_fresh(
         file.path(out_dir, "accounts.csv"),
         data.frame(
           source_system = ss,
@@ -718,11 +706,10 @@ server <- function(input, output, session) {
           account_type  = input$account_type,
           institution   = trimws(input$institution),
           stringsAsFactors = FALSE
-        ),
-        key_cols = c("source_system", "account_id")
+        )
       )
 
-      list(ok = TRUE, n_cols = n_cols, n_layouts = n_layouts, n_accounts = n_accounts)
+      list(ok = TRUE, p_cols = p_cols, p_layouts = p_layouts, p_accounts = p_accounts)
     }, error = function(e) {
       list(ok = FALSE, msg = e$message)
     })
@@ -742,12 +729,9 @@ server <- function(input, output, session) {
         tags$br(),
         tags$code(style = code_style, out_dir),
         tags$ul(style = "margin-top:6px;",
-          tags$li(tags$code(style = code_style, "layout_cols.csv"),
-            sprintf(" — %d rows", result$n_cols)),
-          tags$li(tags$code(style = code_style, "layouts.csv"),
-            sprintf(" — %d rows", result$n_layouts)),
-          tags$li(tags$code(style = code_style, "accounts.csv"),
-            sprintf(" — %d rows", result$n_accounts))
+          tags$li(tags$code(style = code_style, basename(result$p_cols))),
+          tags$li(tags$code(style = code_style, basename(result$p_layouts))),
+          tags$li(tags$code(style = code_style, basename(result$p_accounts)))
         )
       )
     })
