@@ -212,6 +212,44 @@ build_layout <- function(df, raw_names) {
 }
 
 # --------------------------------------------------------------------------
+# DDL generation
+# --------------------------------------------------------------------------
+
+generate_ddl <- function(layout, ss, ai, lid, out_dir) {
+  stamp      <- format(Sys.time(), "%Y%m%d_%H%M%S")
+  table_name <- ai
+  s3_location <- paste0("s3://mftfinances/raw/", ss, "/", ai)
+
+  col_lines <- paste0(
+    "  `", layout$intended_name, "` string COMMENT 'from deserializer'",
+    collapse = ",\n"
+  )
+
+  ddl <- paste0(
+    "CREATE EXTERNAL TABLE ", table_name, "(\n",
+    col_lines, ")\n",
+    "ROW FORMAT SERDE\n",
+    "  'org.apache.hadoop.hive.serde2.OpenCSVSerde'\n",
+    "WITH SERDEPROPERTIES (\n",
+    "  'quoteChar'='\"',\n",
+    "  'separatorChar'=',')\n",
+    "STORED AS INPUTFORMAT\n",
+    "  'org.apache.hadoop.mapred.TextInputFormat'\n",
+    "OUTPUTFORMAT\n",
+    "  'org.apache.hadoop.hive.ql.io.HiveIgnoreKeyTextOutputFormat'\n",
+    "LOCATION\n",
+    "  '", s3_location, "'\n",
+    "TBLPROPERTIES (\n",
+    "  'skip.header.line.count'='1',\n",
+    "  'transient_lastDdlTime'='", as.integer(Sys.time()), "')"
+  )
+
+  path <- file.path(out_dir, paste0("ddl_", stamp, ".sql"))
+  writeLines(ddl, path)
+  path
+}
+
+# --------------------------------------------------------------------------
 # File helpers
 # --------------------------------------------------------------------------
 
@@ -710,7 +748,10 @@ server <- function(input, output, session) {
         )
       )
 
-      list(ok = TRUE, p_cols = p_cols, p_layouts = p_layouts, p_accounts = p_accounts)
+      p_ddl <- generate_ddl(rv$layout, ss, ai, lid, out_dir)
+
+      list(ok = TRUE, p_cols = p_cols, p_layouts = p_layouts,
+           p_accounts = p_accounts, p_ddl = p_ddl)
     }, error = function(e) {
       list(ok = FALSE, msg = e$message)
     })
@@ -732,7 +773,8 @@ server <- function(input, output, session) {
         tags$ul(style = "margin-top:6px;",
           tags$li(tags$code(style = code_style, basename(result$p_cols))),
           tags$li(tags$code(style = code_style, basename(result$p_layouts))),
-          tags$li(tags$code(style = code_style, basename(result$p_accounts)))
+          tags$li(tags$code(style = code_style, basename(result$p_accounts))),
+          tags$li(tags$code(style = code_style, basename(result$p_ddl)))
         )
       )
     })
