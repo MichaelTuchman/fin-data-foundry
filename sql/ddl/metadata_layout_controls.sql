@@ -1,12 +1,9 @@
-CREATE EXTERNAL TABLE `metadata_layout_cols`(
+CREATE EXTERNAL TABLE `metadata_layout_controls`(
   `source_system` string COMMENT 'from deserializer', 
   `account_id` string COMMENT 'from deserializer', 
   `layout_id` string COMMENT 'from deserializer', 
-  `column_position` string COMMENT 'from deserializer', 
-  `canonical_field` string COMMENT 'from deserializer', 
-  `validation_type` string COMMENT 'from deserializer', 
-  `validation_rule` string COMMENT 'from deserializer', 
-  `required` string COMMENT 'from deserializer')
+  `layout_valid_from` string COMMENT 'from deserializer', 
+  `layout_valid_to` string COMMENT 'from deserializer')
 ROW FORMAT SERDE 
   'org.apache.hadoop.hive.serde2.OpenCSVSerde' 
 WITH SERDEPROPERTIES ( 
@@ -17,8 +14,7 @@ STORED AS INPUTFORMAT
 OUTPUTFORMAT 
   'org.apache.hadoop.hive.ql.io.HiveIgnoreKeyTextOutputFormat'
 LOCATION
-  's3://your_bucket_root/metadata/layout_cols'
+  's3://your_bucket_root/metadata/layout_controls'
 TBLPROPERTIES (
   'skip.header.line.count'='1', 
-  'transient_lastDdlTime'='1781147701')
-
+  'transient_lastDdlTime'='1781149447')

@@ -25,18 +25,6 @@ dir_roots <- c(
 # Read CSV with automatic retry on unmatched-quote warning.
 # --------------------------------------------------------------------------
 read_csv_safe <- function(path, header, sep, skip) {
-  # Pre-check: if header has fewer fields than the first data row, read.csv
-  # would silently treat column 1 as row names and error on duplicates.
-  # count.fields() is quote-aware so commas inside quoted values don't inflate the count.
-  if (header) {
-    field_counts <- count.fields(path, sep = sep, skip = skip, blank.lines.skip = TRUE, comment.char = "")
-    if (length(field_counts) >= 2) {
-      n_header <- field_counts[1]
-      n_data   <- field_counts[2]
-      if (n_data > n_header)
-        stop("CSV has fewer column headers (", n_header, ") than data columns (", n_data, ").")
-    }
-  }
 
   args <- list(
     file             = path,
@@ -66,6 +54,35 @@ read_csv_safe <- function(path, header, sep, skip) {
   blank <- apply(df, 1, function(row) all(is.na(row) | trimws(row) == ""))
   df <- df[!blank, , drop = FALSE]
   df
+}
+
+# Check for header/data column count mismatch. Returns NULL if OK, or a list
+# with n_header, n_data, and the first two raw lines for display.
+check_col_mismatch <- function(path, sep, skip) {
+  field_counts <- count.fields(path, sep = sep, skip = skip,
+                               blank.lines.skip = TRUE, comment.char = "")
+  if (length(field_counts) < 2) return(NULL)
+  n_header <- field_counts[1]
+  n_data   <- max(field_counts[-1])
+  if (n_data <= n_header) return(NULL)
+  raw <- readLines(path, warn = FALSE)
+  raw <- raw[nchar(trimws(raw)) > 0]
+  list(
+    n_header  = n_header,
+    n_data    = n_data,
+    n_missing = n_data - n_header,
+    preview   = head(raw[seq(skip + 1, length(raw))], 3)
+  )
+}
+
+# Load with synthetic column names prepended for missing headers.
+read_csv_prepend_cols <- function(path, sep, skip, n_missing) {
+  df_raw <- read.csv(path, header = FALSE, sep = sep, skip = skip,
+                     comment.char = "", stringsAsFactors = FALSE, check.names = FALSE)
+  orig_headers <- as.character(df_raw[1, ])
+  synth        <- paste0("col_", seq_len(n_missing))
+  colnames(df_raw) <- c(synth, orig_headers)
+  df_raw[-1, , drop = FALSE]
 }
 
 # Returns a data frame of duplicate rows with an added Row column (1-based, blank lines excluded).
@@ -422,7 +439,8 @@ server <- function(input, output, session) {
   rv <- reactiveValues(
     raw_df    = NULL,
     raw_names = NULL,
-    layout    = NULL
+    layout    = NULL,
+    pending   = NULL   # holds load params when a mismatch dialog is open
   )
 
   # Directory browser
@@ -481,80 +499,144 @@ server <- function(input, output, session) {
     if (is.na(d)) tags$div(class = "field-error", "Must be YYYY-MM-DD or leave blank.")
   })
 
-  # Load CSV
-  observeEvent(input$csv_file, {
-    req(input$csv_file)
-    tryCatch({
-      skip <- detect_skip_rows(input$csv_file$datapath, sep = input$delimiter)
-      updateNumericInput(session, "skip_rows", value = skip)
-
-      df <- read_csv_safe(input$csv_file$datapath, input$has_header, input$delimiter, skip)
-      if (isTRUE(attr(df, "requoted"))) {
-        showNotification("Unmatched quotes detected -- re-parsed with quoting disabled.",
-          type = "warning", duration = 6)
-      }
-      colnames(df) <- fix_colnames(colnames(df))
-      rv$raw_df    <- df
-      rv$raw_names <- colnames(df)
-      rv$layout    <- build_layout(df, colnames(df))
-
-      dupes <- find_duplicates(df)
-      if (!is.null(dupes)) {
-        showModal(modalDialog(
-          title   = paste0("Duplicate rows detected (", nrow(dupes), " rows)"),
-          size    = "l",
-          easyClose = TRUE,
-          footer  = modalButton("Dismiss"),
-          div(style = "overflow-x:auto;",
-            renderTable(dupes, striped = TRUE, hover = TRUE, bordered = TRUE))
-        ))
-      }
-
-      parsed <- parse_filename(input$csv_file$name)
+  # Shared: finish loading a data frame into rv and handle post-load steps.
+  finish_load <- function(df, filename = NULL, notify = FALSE) {
+    colnames(df) <- fix_colnames(colnames(df))
+    rv$raw_df    <- df
+    rv$raw_names <- colnames(df)
+    rv$layout    <- build_layout(df, colnames(df))
+    if (!is.null(filename)) {
+      parsed <- parse_filename(filename)
       if (!is.null(parsed)) {
         updateTextInput(session, "source_system", value = parsed$source_system)
         updateTextInput(session, "account_id",    value = parsed$account_id)
         updateDateInput(session, "valid_from",    value = parsed$valid_from)
       }
+    }
+    dupes <- find_duplicates(df)
+    if (!is.null(dupes)) {
+      showModal(modalDialog(
+        title     = paste0("Duplicate rows detected (", nrow(dupes), " rows)"),
+        size      = "l",
+        easyClose = TRUE,
+        footer    = modalButton("Dismiss"),
+        div(style = "overflow-x:auto;",
+          renderTable(dupes, striped = TRUE, hover = TRUE, bordered = TRUE))
+      ))
+    } else if (notify) {
+      showNotification("File reloaded.", type = "message")
+    }
+  }
+
+  # Show mismatch dialog offering two fixes.
+  show_mismatch_modal <- function(info) {
+    showModal(modalDialog(
+      title     = paste0("Column header mismatch: ", info$n_header,
+                         " headers vs ", info$n_data, " data columns"),
+      size      = "m",
+      easyClose = FALSE,
+      footer    = tagList(
+        actionButton("fix_prepend_cols",  "Add synthetic column(s)",  class = "btn-primary"),
+        actionButton("fix_disable_quote", "Reload without quoting",   class = "btn-warning"),
+        modalButton("Cancel")
+      ),
+      tags$p(paste0(info$n_missing, " header(s) missing. Choose a fix:")),
+      tags$ul(
+        tags$li(tags$strong("Add synthetic column(s)"),
+          " — prepends col_1 … col_", info$n_missing,
+          " as header(s). Use when the first column(s) have no name."),
+        tags$li(tags$strong("Reload without quoting"),
+          " — re-parses ignoring quote characters. Use when values",
+          " containing commas are not properly quoted.")
+      ),
+      tags$hr(),
+      tags$p(tags$strong("First lines of file:")),
+      tags$pre(paste(info$preview, collapse = "\n"))
+    ))
+  }
+
+  # Load CSV
+  observeEvent(input$csv_file, {
+    req(input$csv_file)
+    path <- input$csv_file$datapath
+    sep  <- input$delimiter
+    tryCatch({
+      skip <- detect_skip_rows(path, sep = sep)
+      updateNumericInput(session, "skip_rows", value = skip)
+
+      mismatch <- check_col_mismatch(path, sep, skip)
+      if (!is.null(mismatch)) {
+        rv$pending <- list(path = path, sep = sep, skip = skip,
+                           n_missing = mismatch$n_missing,
+                           filename = input$csv_file$name)
+        show_mismatch_modal(mismatch)
+        return()
+      }
+
+      df <- read_csv_safe(path, input$has_header, sep, skip)
+      if (isTRUE(attr(df, "requoted")))
+        showNotification("Unmatched quotes detected -- re-parsed with quoting disabled.",
+          type = "warning", duration = 6)
+      finish_load(df, filename = input$csv_file$name)
     }, error = function(e) {
-      showNotification(paste("Error reading file:", e$message),
-        type = "error", duration = 8)
+      showNotification(paste("Error reading file:", e$message), type = "error", duration = 8)
+    })
+  })
+
+  # Fix: prepend synthetic column headers
+  observeEvent(input$fix_prepend_cols, {
+    req(rv$pending)
+    removeModal()
+    tryCatch({
+      p <- rv$pending
+      df <- read_csv_prepend_cols(p$path, p$sep, p$skip, p$n_missing)
+      finish_load(df, filename = p$filename)
+      rv$pending <- NULL
+    }, error = function(e) {
+      showNotification(paste("Error:", e$message), type = "error", duration = 8)
+    })
+  })
+
+  # Fix: reload with quoting disabled
+  observeEvent(input$fix_disable_quote, {
+    req(rv$pending)
+    removeModal()
+    tryCatch({
+      p  <- rv$pending
+      df <- read.csv(p$path, header = TRUE, sep = p$sep, skip = p$skip,
+                     quote = "", comment.char = "", stringsAsFactors = FALSE, check.names = FALSE)
+      blank <- apply(df, 1, function(r) all(is.na(r) | trimws(r) == ""))
+      df    <- df[!blank, , drop = FALSE]
+      finish_load(df, filename = p$filename)
+      rv$pending <- NULL
+      showNotification("Reloaded with quoting disabled.", type = "warning", duration = 5)
+    }, error = function(e) {
+      showNotification(paste("Error:", e$message), type = "error", duration = 8)
     })
   })
 
   # Reload with manually adjusted skip value
   observeEvent(input$reload_csv, {
     req(input$csv_file)
+    path <- input$csv_file$datapath
+    sep  <- input$delimiter
+    skip <- max(0L, as.integer(input$skip_rows))
     tryCatch({
-      df <- read_csv_safe(input$csv_file$datapath, input$has_header,
-                          input$delimiter, max(0L, as.integer(input$skip_rows)))
-      if (isTRUE(attr(df, "requoted"))) {
+      mismatch <- check_col_mismatch(path, sep, skip)
+      if (!is.null(mismatch)) {
+        rv$pending <- list(path = path, sep = sep, skip = skip,
+                           n_missing = mismatch$n_missing,
+                           filename = input$csv_file$name)
+        show_mismatch_modal(mismatch)
+        return()
+      }
+      df <- read_csv_safe(path, input$has_header, sep, skip)
+      if (isTRUE(attr(df, "requoted")))
         showNotification("Unmatched quotes detected -- re-parsed with quoting disabled.",
           type = "warning", duration = 6)
-      } else {
-        showNotification("File reloaded.", type = "message")
-      }
-      colnames(df) <- fix_colnames(colnames(df))
-      rv$raw_df    <- df
-      rv$raw_names <- colnames(df)
-      rv$layout    <- build_layout(df, colnames(df))
-
-      dupes <- find_duplicates(df)
-      if (!is.null(dupes)) {
-        showModal(modalDialog(
-          title   = paste0("Duplicate rows detected (", nrow(dupes), " rows)"),
-          size    = "l",
-          easyClose = TRUE,
-          footer  = modalButton("Dismiss"),
-          div(style = "overflow-x:auto;",
-            renderTable(dupes, striped = TRUE, hover = TRUE, bordered = TRUE))
-        ))
-      } else {
-        showNotification("File reloaded.", type = "message")
-      }
+      finish_load(df, notify = TRUE)
     }, error = function(e) {
-      showNotification(paste("Error reading file:", e$message),
-        type = "error", duration = 8)
+      showNotification(paste("Error reading file:", e$message), type = "error", duration = 8)
     })
   })
 
