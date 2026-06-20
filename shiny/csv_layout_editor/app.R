@@ -705,7 +705,7 @@ server <- function(input, output, session) {
     ai  <- input$account_id
     lid <- input$layout_id
     vf  <- as.character(input$valid_from)
-    vt  <- if (nchar(valid_to_val) > 0) valid_to_val else NA_character_
+    vt  <- if (nchar(valid_to_val) > 0) valid_to_val else ""
 
     result <- tryCatch({
 
