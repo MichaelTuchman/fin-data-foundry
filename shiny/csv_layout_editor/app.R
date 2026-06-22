@@ -232,10 +232,11 @@ build_layout <- function(df, raw_names) {
 # DDL generation
 # --------------------------------------------------------------------------
 
-generate_ddl <- function(layout, ss, ai, lid, out_dir) {
-  stamp      <- format(Sys.time(), "%Y%m%d_%H%M%S")
-  table_name <- ai
-  s3_location <- paste0("s3://mftfinances/raw/", ss, "/", ai)
+generate_ddl <- function(layout, ss, ai, lid, out_dir, s3_root = "") {
+  stamp       <- format(Sys.time(), "%Y%m%d_%H%M%S")
+  table_name  <- ai
+  s3_base     <- if (nchar(trimws(s3_root)) > 0) trimws(s3_root) else "s3://your_bucket_root"
+  s3_location <- paste0(s3_base, "/raw/", ss, "/", ai)
 
   col_lines <- paste0(
     "  `", layout$intended_name, "` string COMMENT 'from deserializer'",
@@ -357,6 +358,9 @@ ui <- fluidPage(
       uiOutput("source_system_msg"),
       textInput("layout_id", "Layout ID", value = "LAYOUT_A"),
       uiOutput("layout_id_msg"),
+      textInput("s3_root", "S3 Root",
+        placeholder = "e.g. s3://my-bucket"
+      ),
       dateInput("valid_from", "Layout Valid From",
         value  = Sys.Date(),
         format = "yyyy-mm-dd"
@@ -830,7 +834,7 @@ server <- function(input, output, session) {
         )
       )
 
-      p_ddl <- generate_ddl(rv$layout, ss, ai, lid, out_dir)
+      p_ddl <- generate_ddl(rv$layout, ss, ai, lid, out_dir, input$s3_root)
 
       list(ok = TRUE, p_cols = p_cols, p_layouts = p_layouts,
            p_accounts = p_accounts, p_ddl = p_ddl)
