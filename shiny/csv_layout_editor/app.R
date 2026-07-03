@@ -60,11 +60,11 @@ read_csv_safe <- function(path, header, sep, skip) {
 # with n_header, n_data, and the first two raw lines for display.
 check_col_mismatch <- function(path, sep, skip) {
   field_counts <- count.fields(path, sep = sep, skip = skip,
-                               blank.lines.skip = TRUE, comment.char = "")
+                               quote = "\"", blank.lines.skip = TRUE, comment.char = "")
   if (length(field_counts) < 2) return(NULL)
   n_header <- field_counts[1]
-  n_data   <- max(field_counts[-1])
-  if (n_data <= n_header) return(NULL)
+  n_data   <- max(field_counts[-1], na.rm = TRUE)
+  if (is.na(n_header) || is.na(n_data) || n_data <= n_header) return(NULL)
   raw <- readLines(path, warn = FALSE)
   raw <- raw[nchar(trimws(raw)) > 0]
   list(
