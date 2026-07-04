@@ -91,7 +91,7 @@ typed AS (
         t.status,
         CASE
             WHEN t.account_type = 'credit_card'
-             AND t.amount_d < 0
+             AND t.amount_d > 0
                 THEN 'purchase'
             ELSE 'unknown'
         END AS transaction_type,
