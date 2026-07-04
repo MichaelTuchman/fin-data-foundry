@@ -1,4 +1,3 @@
-
 CREATE OR REPLACE VIEW trans_typed AS
 WITH rule_matches AS (
     SELECT
@@ -41,6 +40,71 @@ WITH rule_matches AS (
                 AND regexp_like(upper(t.description), upper(r.description_pattern))
             )
        )
+),
+typed AS (
+    SELECT
+        source_file_path,
+        source_file_name,
+        source_system,
+        account_id,
+        account_label,
+        account_type,
+        institution,
+        file_start_dt,
+        file_end_dt,
+        layout_id,
+        derived_row_serial,
+        transaction_date,
+        transaction_dt,
+        description,
+        amount,
+        amount_d,
+        check_number,
+        status,
+        transaction_type,
+        transaction_subtype,
+        matched_transaction_type_rule_id,
+        matched_transaction_type_rule_priority
+    FROM rule_matches
+    WHERE rule_rank = 1
+
+    UNION ALL
+
+    SELECT
+        t.source_file_path,
+        t.source_file_name,
+        t.source_system,
+        t.account_id,
+        t.account_label,
+        t.account_type,
+        t.institution,
+        t.file_start_dt,
+        t.file_end_dt,
+        t.layout_id,
+        t.derived_row_serial,
+        t.transaction_date,
+        t.transaction_dt,
+        t.description,
+        t.amount,
+        t.amount_d,
+        t.check_number,
+        t.status,
+        CASE
+            WHEN t.account_type = 'credit_card'
+             AND t.amount_d < 0
+                THEN 'purchase'
+            ELSE 'unknown'
+        END AS transaction_type,
+        CAST(NULL AS varchar) AS transaction_subtype,
+        CAST(NULL AS varchar) AS matched_transaction_type_rule_id,
+        CAST(NULL AS integer) AS matched_transaction_type_rule_priority
+    FROM trans_analy t
+    WHERE NOT EXISTS (
+        SELECT 1
+        FROM rule_matches r
+        WHERE r.source_file_path = t.source_file_path
+          AND r.derived_row_serial = t.derived_row_serial
+    )
 )
 SELECT
     source_file_path,
@@ -65,5 +129,4 @@ SELECT
     transaction_subtype,
     matched_transaction_type_rule_id,
     matched_transaction_type_rule_priority
-FROM rule_matches
-WHERE rule_rank = 1;
+FROM typed
