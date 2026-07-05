@@ -129,4 +129,4 @@ SELECT
     transaction_subtype,
     matched_transaction_type_rule_id,
     matched_transaction_type_rule_priority
-FROM typed
+FROM trans_cleaned 
