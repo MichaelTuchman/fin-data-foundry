@@ -122,6 +122,21 @@ Transforms canonical records into analysis-ready transaction structures.
 
 Final typed dataset for downstream analysis and reporting.
 
+### trans_cleaned
+
+Applies deterministic lexical cleaning to transaction descriptions while preserving the original bank-supplied text in `source_description`. This stage performs only non-semantic normalization, such as whitespace cleanup and removal of known boilerplate.
+
+### trans_typed
+
+Classifies transactions using metadata-driven transaction type rules. This stage adds transaction type metadata while preserving all columns produced by `trans_cleaned`.
+
+### trans_normalized
+
+Performs semantic normalization after transaction typing. This stage may simplify descriptions, remove transaction-type-specific boilerplate, or apply other semantic transformations while preserving the original and cleaned descriptions.
+
+### trans_export
+
+Provides a stable, user-facing dataset suitable for reporting, visualization, download, and downstream analytics. This view represents the recommended interface for most consumers of Finance Foundry.
 ---
 
 ## Use Cases
