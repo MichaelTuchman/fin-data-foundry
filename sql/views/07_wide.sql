@@ -1,88 +1,100 @@
-CREATE OR REPLACE VIEW finances.canon_wide AS
-WITH valid_rows AS (
+CREATE OR REPLACE VIEW canon_wide AS
+WITH long_with_money AS (
     SELECT
         source_file_path,
-        derived_row_serial
-    FROM finances.canon_long
+        source_file_name,
+        source_system,
+        account_id,
+        file_start_dt,
+        file_end_dt,
+        layout_id,
+        derived_row_serial,
+        canonical_field,
+        raw_value,
+        validation_type,
+        validation_passed,
+        CASE
+            WHEN validation_type = 'money' THEN
+                TRY_CAST(
+                    regexp_replace(
+                        regexp_replace(
+                            regexp_replace(
+                                trim(raw_value),
+                                '[$,]',
+                                ''
+                            ),
+                            '^\((.*)\)$',
+                            '-$1'
+                        ),
+                        '^$',
+                        '0'
+                    ) AS decimal(18,2)
+                )
+            ELSE NULL
+        END AS money_value_d
+    FROM canon_long
+    WHERE validation_passed = true
+),
+wide_base AS (
+    SELECT
+        source_file_path,
+        source_file_name,
+        source_system,
+        account_id,
+        file_start_dt,
+        file_end_dt,
+        layout_id,
+        derived_row_serial,
+
+        max(CASE WHEN canonical_field = 'transaction_date' THEN raw_value END) AS transaction_date,
+        max(CASE WHEN canonical_field = 'description' THEN raw_value END) AS description,
+
+        max(CASE WHEN canonical_field = 'amount' THEN raw_value END) AS amount,
+        max(CASE WHEN canonical_field = 'amount' THEN money_value_d END) AS signed_amount_d,
+
+        max(CASE WHEN canonical_field = 'debit_amount' THEN raw_value END) AS debit_amount,
+        max(CASE WHEN canonical_field = 'debit_amount' THEN money_value_d END) AS debit_amount_d,
+
+        max(CASE WHEN canonical_field = 'credit_amount' THEN raw_value END) AS credit_amount,
+        max(CASE WHEN canonical_field = 'credit_amount' THEN money_value_d END) AS credit_amount_d,
+
+        max(CASE WHEN canonical_field = 'check_number' THEN raw_value END) AS check_number,
+        max(CASE WHEN canonical_field = 'status' THEN raw_value END) AS status
+    FROM long_with_money
     GROUP BY
         source_file_path,
+        source_file_name,
+        source_system,
+        account_id,
+        file_start_dt,
+        file_end_dt,
+        layout_id,
         derived_row_serial
-    HAVING SUM(
-        CASE
-            WHEN required = 'true'
-             AND validation_passed = false
-            THEN 1
-            ELSE 0
-        END
-    ) = 0
 )
 SELECT
-    cl.source_file_path,
-    cl.source_file_name,
-    cl.source_system,
-    cl.account_id,
-    cl.file_start_dt,
-    cl.file_end_dt,
-    cl.layout_id,
-    cl.derived_row_serial,
+    source_file_path,
+    source_file_name,
+    source_system,
+    account_id,
+    file_start_dt,
+    file_end_dt,
+    layout_id,
+    derived_row_serial,
+    transaction_date,
+    description,
 
-    MAX(CASE
-        WHEN lower(cl.canonical_field) = 'transaction_date'
-        THEN cl.raw_value
-    END) AS transaction_date,
+    coalesce(
+        amount,
+        credit_amount,
+        debit_amount
+    ) AS amount,
 
-    MAX(CASE
-        WHEN lower(cl.canonical_field) = 'description'
-        THEN cl.raw_value
-    END) AS description,
+    coalesce(
+        signed_amount_d,
+        coalesce(credit_amount_d, CAST(0 AS decimal(18,2)))
+          - coalesce(debit_amount_d, CAST(0 AS decimal(18,2)))
+    ) AS amount_d,
 
-    MAX(CASE
-        WHEN lower(cl.canonical_field) = 'amount'
-        THEN cl.raw_value
-    END) AS amount,
-
-    MAX(CASE
-        WHEN lower(cl.canonical_field) = 'amount'
-        THEN TRY_CAST(
-            CASE
-                WHEN cl.raw_value IS NULL OR trim(cl.raw_value) = '' THEN NULL
-                WHEN regexp_like(trim(cl.raw_value), '^[(].*[)]$') THEN
-                    '-' || regexp_replace(
-                        regexp_replace(trim(cl.raw_value), '[^0-9.,-]', ''),
-                        ',',
-                        ''
-                    )
-                ELSE
-                    regexp_replace(
-                        regexp_replace(trim(cl.raw_value), '[^0-9.,-]', ''),
-                        ',',
-                        ''
-                    )
-            END
-            AS decimal(18,2)
-        )
-    END) AS amount_d,
-
-    MAX(CASE
-        WHEN lower(cl.canonical_field) = 'check_number'
-        THEN cl.raw_value
-    END) AS check_number,
-
-    MAX(CASE
-        WHEN lower(cl.canonical_field) = 'status'
-        THEN cl.raw_value
-    END) AS status
-
-FROM finances.canon_long cl
-JOIN valid_rows vr
-  ON cl.source_file_path = vr.source_file_path
- AND cl.derived_row_serial = vr.derived_row_serial
-GROUP BY
-    cl.source_file_path,
-    cl.source_file_name,
-    cl.source_system,
-    cl.account_id,
-    cl.file_start_dt,
-    cl.file_end_dt,
-    cl.layout_id,
-    cl.derived_row_serial;
+    check_number,
+    status
+FROM wide_base;
