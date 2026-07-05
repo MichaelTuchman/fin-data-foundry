@@ -89,10 +89,12 @@ SELECT
         debit_amount
     ) AS amount,
 
-    coalesce(
-        signed_amount_d,
-        coalesce(credit_amount_d, CAST(0 AS decimal(18,2)))
-          - coalesce(debit_amount_d, CAST(0 AS decimal(18,2)))
+    CAST(
+        coalesce(
+            signed_amount_d,
+            coalesce(credit_amount_d, CAST(0 AS decimal(18,2)))
+              - coalesce(debit_amount_d, CAST(0 AS decimal(18,2)))
+        ) AS decimal(18,2)
     ) AS amount_d,
 
     check_number,
