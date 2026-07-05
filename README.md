@@ -142,7 +142,7 @@ Performs semantic normalization after transaction typing. This stage may simplif
 
 ### trans_export
 
-Provides a stable, user-facing dataset suitable for reporting, visualization, download, and downstream analytics. This view represents the recommended interface for most consumers of Finance Foundry.
+Provides a stable, user-facing dataset suitable for reporting, visualization, download, and downstream analytics. This view represents the recommended interface for most consumers of Finance Foundry
 ---
 
 ## Use Cases
