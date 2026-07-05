@@ -83,14 +83,19 @@ Row preservation is treated as a first-class invariant throughout the pipeline.
 The reference implementation uses a staged transformation model:
 
 ```text
-raw_csv
-  → raw_boundary
-  → file_context
-  → layout_match
-  → canon_long
-  → canon_wide
-  → trans_analy
-```
+raw
+    ↓
+canonical
+    ↓
+analysis
+    ↓
+lexical cleanup
+    ↓
+typing
+    ↓
+semantic normalization
+    ↓
+export```
 
 ### raw_boundary
 
