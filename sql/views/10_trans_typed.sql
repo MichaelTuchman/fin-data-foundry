@@ -4,8 +4,8 @@ WITH rule_matches AS (
         t.*,
         r.rule_id AS matched_transaction_type_rule_id,
         r.rule_priority AS matched_transaction_type_rule_priority,
-        r.transaction_type,
-        r.transaction_subtype,
+        r.transaction_type AS matched_transaction_type,
+        r.transaction_subtype AS matched_transaction_subtype,
         ROW_NUMBER() OVER (
             PARTITION BY
                 t.source_file_path,
@@ -14,7 +14,7 @@ WITH rule_matches AS (
                 r.rule_priority,
                 r.rule_id
         ) AS rule_rank
-    FROM trans_analy t
+    FROM trans_cleaned t
     JOIN metadata_transaction_type_rules r
         ON r.active = true
        AND (r.source_system = 'any' OR r.source_system = t.source_system)
@@ -41,35 +41,12 @@ WITH rule_matches AS (
             )
        )
 ),
-typed AS (
-    SELECT
-        source_file_path,
-        source_file_name,
-        source_system,
-        account_id,
-        account_label,
-        account_type,
-        institution,
-        file_start_dt,
-        file_end_dt,
-        layout_id,
-        derived_row_serial,
-        transaction_date,
-        transaction_dt,
-        description,
-        amount,
-        amount_d,
-        check_number,
-        status,
-        transaction_type,
-        transaction_subtype,
-        matched_transaction_type_rule_id,
-        matched_transaction_type_rule_priority
+ranked_matches AS (
+    SELECT *
     FROM rule_matches
     WHERE rule_rank = 1
-
-    UNION ALL
-
+),
+typed AS (
     SELECT
         t.source_file_path,
         t.source_file_name,
@@ -84,6 +61,7 @@ typed AS (
         t.derived_row_serial,
         t.transaction_date,
         t.transaction_dt,
+        t.source_description,
         t.description,
         t.amount,
         t.amount_d,
@@ -91,20 +69,32 @@ typed AS (
         t.status,
         CASE
             WHEN t.account_type = 'credit_card'
-             AND t.amount_d > 0
+             AND t.amount_d < 0
+             AND (
+                    r.matched_transaction_type IS NULL
+                 OR r.matched_transaction_type = 'unknown'
+                 )
                 THEN 'purchase'
+            WHEN r.matched_transaction_type IS NOT NULL
+                THEN r.matched_transaction_type
             ELSE 'unknown'
         END AS transaction_type,
-        CAST(NULL AS varchar) AS transaction_subtype,
-        CAST(NULL AS varchar) AS matched_transaction_type_rule_id,
-        CAST(NULL AS integer) AS matched_transaction_type_rule_priority
-    FROM trans_analy t
-    WHERE NOT EXISTS (
-        SELECT 1
-        FROM rule_matches r
-        WHERE r.source_file_path = t.source_file_path
-          AND r.derived_row_serial = t.derived_row_serial
-    )
+        CASE
+            WHEN t.account_type = 'credit_card'
+             AND t.amount_d < 0
+             AND (
+                    r.matched_transaction_type IS NULL
+                 OR r.matched_transaction_type = 'unknown'
+                 )
+                THEN CAST(NULL AS varchar)
+            ELSE r.matched_transaction_subtype
+        END AS transaction_subtype,
+        r.matched_transaction_type_rule_id,
+        r.matched_transaction_type_rule_priority
+    FROM trans_cleaned t
+    LEFT JOIN ranked_matches r
+        ON r.source_file_path = t.source_file_path
+       AND r.derived_row_serial = t.derived_row_serial
 )
 SELECT
     source_file_path,
@@ -120,6 +110,7 @@ SELECT
     derived_row_serial,
     transaction_date,
     transaction_dt,
+    source_description,
     description,
     amount,
     amount_d,
@@ -129,4 +120,4 @@ SELECT
     transaction_subtype,
     matched_transaction_type_rule_id,
     matched_transaction_type_rule_priority
-FROM trans_cleaned 
+FROM typed;

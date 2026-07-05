@@ -14,19 +14,27 @@ SELECT
     transaction_date,
     transaction_dt,
     description AS source_description,
-    TRIM(
+    trim(
         regexp_replace(
             regexp_replace(
-                regexp_replace(description, '[\r\n\t]+', ' '),
-                ' +',
-                ' '
+                regexp_replace(
+                    regexp_replace(
+                        regexp_replace(description, '[\r\n\t]+', ' '),
+                        '\bPURCHASE AUTHORIZED ON +[0-9]{1,2}/[0-9]{1,2} +',
+                        ''
+                    ),
+                    '\bRECURRING PAYMENT AUTHORIZED ON +[0-9]{1,2}/[0-9]{1,2} +',
+                    ''
+                ),
+                '\b(LLC|INC|CORP|LTD|LP|LLP|PLLC|PC)([A-Z])',
+                '$1 $2'
             ),
-            '(^ +| +$)',
-            ''
+            ' {2,}',
+            ' '
         )
     ) AS description,
     amount,
     amount_d,
     check_number,
     status
-FROM trans_analy
+FROM trans_analy;

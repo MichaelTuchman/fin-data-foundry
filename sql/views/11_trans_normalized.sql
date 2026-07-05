@@ -13,15 +13,19 @@ SELECT
     derived_row_serial,
     transaction_date,
     transaction_dt,
-    description_original,
-    description AS description_cleaned,
+    source_description,
+    description AS cleaned_description,
     CASE
         WHEN transaction_type = 'credit_card_payment' THEN
             trim(
                 regexp_replace(
                     regexp_replace(
-                        regexp_replace(description, '\bONLINE PAYMENT\b', ''),
-                        '\bWEB PYMT\b',
+                        regexp_replace(
+                            regexp_replace(description, '\bONLINE PAYMENT\b', ''),
+                            '\bWEB PYMT\b',
+                            ''
+                        ),
+                        '\bPAYMENT\b',
                         ''
                     ),
                     ' {2,}',
@@ -36,5 +40,6 @@ SELECT
     status,
     transaction_type,
     transaction_subtype,
-    transaction_type_rule_id
+    matched_transaction_type_rule_id,
+    matched_transaction_type_rule_priority
 FROM trans_typed;
