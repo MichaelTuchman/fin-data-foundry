@@ -1,4 +1,4 @@
-CREATE OR REPLACE VIEW finances.trans_analy AS
+CREATE OR REPLACE VIEW trans_analy AS
 SELECT
     cw.source_file_path,
     cw.source_file_name,
@@ -12,16 +12,14 @@ SELECT
     cw.layout_id,
     cw.derived_row_serial,
     cw.transaction_date,
-    COALESCE(
-        TRY_CAST(cw.transaction_date AS date),
-        TRY(date_parse(cw.transaction_date, '%m/%d/%Y'))
-    ) AS transaction_dt,
+    TRY_CAST(date_parse(cw.transaction_date, '%m/%d/%Y') AS date) AS transaction_dt,
     cw.description,
     cw.amount,
-    cw.amount_d,
+    cw.amount_d AS amount_d_raw,
+    cw.amount_d * (-1 * ma.debit_sign_convention) AS amount_d,
     cw.check_number,
     cw.status
-FROM finances.canon_wide cw
-LEFT JOIN finances.metadata_accounts ma
+FROM canon_wide cw
+LEFT JOIN metadata_accounts ma
     ON cw.source_system = ma.source_system
    AND cw.account_id = ma.account_id;
