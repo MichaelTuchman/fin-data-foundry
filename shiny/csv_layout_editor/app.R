@@ -322,6 +322,8 @@ ui <- fluidPage(
 
       h3("1. Load CSV"),
       fileInput("csv_file", "Choose CSV file", accept = ".csv"),
+      actionButton("load_csv", "Load", icon = icon("upload"),
+        class = "btn-primary btn-sm", style = "margin-top:-8px; margin-bottom:10px;"),
       checkboxInput("has_header", "File has header row", value = TRUE),
       selectInput("delimiter", "Delimiter",
         choices = c("Comma" = ",", "Tab" = "\t", "Semicolon" = ";", "Pipe" = "|"),
@@ -559,8 +561,8 @@ server <- function(input, output, session) {
     ))
   }
 
-  # Load CSV
-  observeEvent(input$csv_file, {
+  # Shared load-from-file logic (used by csv_file observer and Load button)
+  do_load_csv <- function() {
     req(input$csv_file)
     path <- input$csv_file$datapath
     sep  <- input$delimiter
@@ -585,7 +587,11 @@ server <- function(input, output, session) {
     }, error = function(e) {
       showNotification(paste("Error reading file:", e$message), type = "error", duration = 8)
     })
-  })
+  }
+
+  # Load CSV on file picker change or explicit Load button
+  observeEvent(input$csv_file, { do_load_csv() })
+  observeEvent(input$load_csv, { do_load_csv() })
 
   # Fix: prepend synthetic column headers
   observeEvent(input$fix_prepend_cols, {
@@ -718,10 +724,22 @@ server <- function(input, output, session) {
     if (col_idx == 3L) rv$layout[info$row, 3L] <- tolower(rv$layout[info$row, 3L])
   })
 
-  # Data preview -- grey out non-required columns
+  # Data preview -- grey out non-required columns; format money cols to 2dp
   output$data_preview <- renderDT({
     req(rv$raw_df, rv$layout)
-    dt <- datatable(rv$raw_df,
+
+    # Convert inferred money columns to numeric for display
+    money_cols <- rv$layout$original_name[rv$layout$validation_type == "regex"]
+    money_cols <- intersect(money_cols, names(rv$raw_df))
+    display_df <- rv$raw_df
+    for (col in money_cols) {
+      raw     <- display_df[[col]]
+      cleaned <- trimws(gsub("[$, ]", "", raw))
+      cleaned <- gsub("^\\((.+)\\)$", "-\\1", cleaned)
+      display_df[[col]] <- suppressWarnings(as.numeric(cleaned))
+    }
+
+    dt <- datatable(display_df,
       rownames  = FALSE,
       selection = "none",
       options   = list(
@@ -732,6 +750,9 @@ server <- function(input, output, session) {
         ordering   = FALSE
       )
     )
+    if (length(money_cols) > 0)
+      dt <- formatRound(dt, columns = money_cols, digits = 2)
+
     not_required <- rv$layout$original_name[!rv$layout$required]
     cols_to_grey <- intersect(not_required, names(rv$raw_df))
     if (length(cols_to_grey) > 0) {

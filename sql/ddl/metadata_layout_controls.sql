@@ -14,7 +14,7 @@ STORED AS INPUTFORMAT
 OUTPUTFORMAT 
   'org.apache.hadoop.hive.ql.io.HiveIgnoreKeyTextOutputFormat'
 LOCATION
-  's3://your_bucket_root/metadata/layout_controls'
+  's3://mftfinances/metadata/layout_controls'
 TBLPROPERTIES (
   'skip.header.line.count'='1', 
   'transient_lastDdlTime'='1781149447')

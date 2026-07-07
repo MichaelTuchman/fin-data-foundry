@@ -4,7 +4,8 @@ CREATE EXTERNAL TABLE `metadata_accounts`(
   `account_label` string COMMENT 'from deserializer', 
   `account_type` string COMMENT 'from deserializer', 
   `institution` string COMMENT 'from deserializer', 
-  `currency` string COMMENT 'from deserializer')
+  `currency` string COMMENT 'from deserializer',
+  `debit_sign_convention` string COMMENT 'from deserializer')
 ROW FORMAT SERDE 
   'org.apache.hadoop.hive.serde2.OpenCSVSerde' 
 WITH SERDEPROPERTIES ( 
@@ -15,8 +16,7 @@ STORED AS INPUTFORMAT
 OUTPUTFORMAT 
   'org.apache.hadoop.hive.ql.io.HiveIgnoreKeyTextOutputFormat'
 LOCATION
-  's3://your_bucket_root/metadata/accounts'
+  's3://mftfinances/metadata/accounts'
 TBLPROPERTIES (
   'skip.header.line.count'='1', 
   'transient_lastDdlTime'='1781475063')
-
