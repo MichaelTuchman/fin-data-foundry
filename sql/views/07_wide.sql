@@ -10,12 +10,20 @@ SELECT
     derived_row_serial,
     MAX(CASE WHEN canonical_field = 'transaction_date' THEN raw_value END) AS transaction_date,
     MAX(CASE WHEN canonical_field = 'description' THEN raw_value END) AS description,
-    MAX(CASE WHEN canonical_field = 'amount' THEN raw_value END) AS amount,
+    COALESCE(
+        MAX(CASE WHEN canonical_field = 'amount' THEN raw_value END),
+        MAX(CASE WHEN canonical_field = 'credit_amount' THEN raw_value END),
+        MAX(CASE WHEN canonical_field = 'debit_amount' THEN raw_value END)
+    ) AS amount,
     TRY_CAST(
         REGEXP_REPLACE(
             REGEXP_REPLACE(
                 REGEXP_REPLACE(
-                    MAX(CASE WHEN canonical_field = 'amount' THEN raw_value END),
+                    COALESCE(
+                        MAX(CASE WHEN canonical_field = 'amount' THEN raw_value END),
+                        MAX(CASE WHEN canonical_field = 'credit_amount' THEN raw_value END),
+                        MAX(CASE WHEN canonical_field = 'debit_amount' THEN raw_value END)
+                    ),
                     '[$,]',
                     ''
                 ),
@@ -40,4 +48,8 @@ GROUP BY
     derived_row_serial
 HAVING
     MAX(CASE WHEN canonical_field = 'transaction_date' THEN raw_value END) <> 'Date'
-    AND MAX(CASE WHEN canonical_field = 'amount' THEN raw_value END) <> 'Amount';
+    AND COALESCE(
+        MAX(CASE WHEN canonical_field = 'amount' THEN raw_value END),
+        MAX(CASE WHEN canonical_field = 'credit_amount' THEN raw_value END),
+        MAX(CASE WHEN canonical_field = 'debit_amount' THEN raw_value END)
+    ) NOT IN ('Amount', 'Credit', 'Debit');
