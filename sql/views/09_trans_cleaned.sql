@@ -12,20 +12,6 @@ SELECT
     layout_id,
     derived_row_serial,
     transaction_date,
-CREATE OR REPLACE VIEW trans_cleaned AS
-SELECT
-    source_file_path,
-    source_file_name,
-    source_system,
-    account_id,
-    account_label,
-    account_type,
-    institution,
-    file_start_dt,
-    file_end_dt,
-    layout_id,
-    derived_row_serial,
-    transaction_date,
     transaction_dt,
     description AS source_description,
     trim(

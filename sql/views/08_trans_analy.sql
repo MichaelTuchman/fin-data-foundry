@@ -16,7 +16,11 @@ SELECT
     cw.description,
     cw.amount,
     cw.amount_d AS amount_d_raw,
-    cw.amount_d * (-1 * ma.debit_sign_convention) AS amount_d,
+    CASE
+        WHEN ma.debit_sign_convention = 'positive' THEN cw.amount_d * -1
+        WHEN ma.debit_sign_convention = 'negative' THEN cw.amount_d
+        ELSE cw.amount_d
+    END AS amount_d,
     cw.check_number,
     cw.status
 FROM canon_wide cw
