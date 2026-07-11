@@ -12,9 +12,11 @@ SELECT
     cw.layout_id,
     cw.derived_row_serial,
     cw.transaction_date,
-    COALESCE(
-        TRY_CAST(cw.transaction_date AS date),
-        TRY(date_parse(cw.transaction_date, '%m/%d/%Y'))
+    CAST(
+        COALESCE(
+            TRY_CAST(cw.transaction_date AS date),
+            TRY(date_parse(cw.transaction_date, '%m/%d/%Y'))
+        ) AS date
     ) AS transaction_dt,
     cw.description,
     cw.amount,

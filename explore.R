@@ -58,7 +58,7 @@ return(downloader)
 DT = fetch_data()
 
 # ==============================================================
-# download a view by number
+# download a view by name
 # ==============================================================
 download_view <- function(view_name,connection=con3,limit=NULL) {
   query = str_c("Select * from ",view_name)
