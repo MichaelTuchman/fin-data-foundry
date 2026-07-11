@@ -4,6 +4,7 @@ library(reticulate)
 library(data.table)
 library(knitr)
 library(scales)
+library(stringr)
 
 options(rstudio.connectionObserver.errorsSuppressed = TRUE)
 # Run athena view helper ----
@@ -48,10 +49,22 @@ fetch_data<- function() {
   message('May take a few minutes to process all views and download')
 downloader <- DBI::dbGetQuery(
   con3,
-  "SELECT * FROM trans_export"
+  "SELECT * FROM trans_normalized"
 ) |> data.table()
 setkey(downloader,account_label,account_type,transaction_date)
 return(downloader) 
 }
 
 DT = fetch_data()
+
+# ==============================================================
+# download a view by number
+# ==============================================================
+download_view <- function(view_name,connection=con3,limit=NULL) {
+  query = str_c("Select * from ",view_name)
+  if (!is.null(limit)) {
+    query = str_c(query," LIMIT ",limit)
+  }
+  DBI::dbGetQuery(connection,query) |> data.table()
+}
+  
