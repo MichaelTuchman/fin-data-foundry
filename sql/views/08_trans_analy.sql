@@ -12,7 +12,10 @@ SELECT
     cw.layout_id,
     cw.derived_row_serial,
     cw.transaction_date,
-    TRY_CAST(date_parse(cw.transaction_date, '%m/%d/%Y') AS date) AS transaction_dt,
+    COALESCE(
+        TRY_CAST(cw.transaction_date AS date),
+        TRY(date_parse(cw.transaction_date, '%m/%d/%Y'))
+    ) AS transaction_dt,
     cw.description,
     cw.amount,
     cw.amount_d AS amount_d_raw,
@@ -26,4 +29,5 @@ SELECT
 FROM canon_wide cw
 LEFT JOIN metadata_accounts ma
     ON cw.source_system = ma.source_system
-   AND cw.account_id = ma.account_id;
+   AND cw.account_id = ma.account_id
+WHERE cw.amount_d IS NOT NULL;
