@@ -49,9 +49,9 @@ fetch_data<- function() {
   message('May take a few minutes to process all views and download')
 downloader <- DBI::dbGetQuery(
   con3,
-  "SELECT * FROM trans_normalized"
+  "SELECT * FROM trans_export"
 ) |> data.table()
-setkey(downloader,account_label,account_type,transaction_date)
+setkey(downloader,account_label,account_type,transaction_dt)
 return(downloader) 
 }
 
