@@ -1,0 +1,159 @@
+version: 1
+rules:
+- rule_id: PAYROLL_001
+  rule_priority: 10
+  active: true
+  source_system: any
+  account_id: any
+  account_type: checking
+  description_match_type: regex
+  description_pattern: PAYROLL|DIRECT DEP|DIR DEP|SALARY
+  amount_sign: positive
+  transaction_type: deposit
+  transaction_subtype: payroll
+  rule_note: Generic payroll/direct-deposit pattern; employer-specific payroll rules belong in a user overlay.
+- rule_id: CCPAY_001
+  rule_priority: 20
+  active: true
+  source_system: any
+  account_id: any
+  account_type: checking
+  description_match_type: regex
+  description_pattern: CREDIT CARD|AUTOPAY|ONLINE PAYMENT|PAYMENT TO
+  amount_sign: negative
+  transaction_type: payment
+  transaction_subtype: null
+  rule_note: Checking-account payment identified by credit-card payment language.
+- rule_id: CCPAY_002
+  rule_priority: 20
+  active: true
+  source_system: any
+  account_id: any
+  account_type: credit_card
+  description_match_type: regex
+  description_pattern: PAYMENT|AUTOPAY|THANK YOU
+  amount_sign: any
+  transaction_type: payment
+  transaction_subtype: null
+  rule_note: Credit-card payment text before purchase fallback.
+- rule_id: FINCHG_001
+  rule_priority: 30
+  active: true
+  source_system: any
+  account_id: any
+  account_type: credit_card
+  description_match_type: regex
+  description_pattern: INTEREST|FINANCE CHARGE
+  amount_sign: any
+  transaction_type: interest
+  transaction_subtype: null
+  rule_note: Interest or finance-charge transaction identified on a credit-card account.
+- rule_id: FEE_001
+  rule_priority: 40
+  active: true
+  source_system: any
+  account_id: any
+  account_type: any
+  description_match_type: regex
+  description_pattern: FEE|SERVICE CHARGE|LATE FEE|RETURNED CHECK CHG|FOREIGN CURRENCY CONVERSION FEE
+  amount_sign: any
+  transaction_type: fee
+  transaction_subtype: null
+  rule_note: Fees can appear with either sign depending on account/source.
+- rule_id: BILLPAY_001
+  rule_priority: 50
+  active: true
+  source_system: any
+  account_id: any
+  account_type: checking
+  description_match_type: regex
+  description_pattern: BILL PAY|ACHBILLPAY
+  amount_sign: negative
+  transaction_type: payment
+  transaction_subtype: null
+  rule_note: Checking-account payment made through a bill-pay mechanism.
+- rule_id: CHECK_001
+  rule_priority: 55
+  active: true
+  source_system: any
+  account_id: any
+  account_type: checking
+  description_match_type: regex
+  description_pattern: '^CHECK|CHECK #'
+  amount_sign: negative
+  transaction_type: check
+  transaction_subtype: null
+  rule_note: Paper/electronic check outflows.
+- rule_id: TRANSFER_001
+  rule_priority: 60
+  active: true
+  source_system: any
+  account_id: any
+  account_type: checking
+  description_match_type: regex
+  description_pattern: TRANSFER|XFER
+  amount_sign: negative
+  transaction_type: transfer
+  transaction_subtype: null
+  rule_note: Checking-account transfer outflows; positive transfers fall through to deposit rules.
+- rule_id: PURCH_000
+  rule_priority: 85
+  active: true
+  source_system: any
+  account_id: any
+  account_type: credit_card
+  description_match_type: regex
+  description_pattern: \b(PURCHASE|POS PURCHASE|DEBIT PURCHASE)\b
+  amount_sign: negative
+  transaction_type: purchase
+  transaction_subtype: null
+  rule_note: Explicit purchase language after cleaning; evaluated before fallback purchase rule.
+- rule_id: DEP_001
+  rule_priority: 90
+  active: true
+  source_system: any
+  account_id: any
+  account_type: checking
+  description_match_type: any
+  description_pattern: null
+  amount_sign: positive
+  transaction_type: deposit
+  transaction_subtype: non_payroll
+  rule_note: Checking-account positive fallback after payroll rules.
+- rule_id: PURCH_001
+  rule_priority: 90
+  active: true
+  source_system: any
+  account_id: any
+  account_type: credit_card
+  description_match_type: any
+  description_pattern: null
+  amount_sign: negative
+  transaction_type: purchase
+  transaction_subtype: null
+  rule_note: Credit-card negative fallback purchase rule after explicit purchase, payment, interest, and fee rules.
+- rule_id: WD_001
+  rule_priority: 95
+  active: true
+  source_system: any
+  account_id: any
+  account_type: checking
+  description_match_type: any
+  description_pattern: null
+  amount_sign: negative
+  transaction_type: withdrawal
+  transaction_subtype: null
+  rule_note: Checking-account negative fallback after payment, check, transfer, and fee rules; preserved as a generic withdrawal rather than inferred
+    as a purchase.
+- rule_id: UNK_001
+  rule_priority: 999
+  active: true
+  source_system: any
+  account_id: any
+  account_type: any
+  description_match_type: any
+  description_pattern: null
+  amount_sign: any
+  transaction_type: unknown
+  transaction_subtype: null
+  rule_note: Final catch-all; should be monitored and reduced over time.

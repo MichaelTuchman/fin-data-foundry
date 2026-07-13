@@ -68,25 +68,3 @@ download_view <- function(view_name,connection=con3,limit=NULL) {
   DBI::dbGetQuery(connection,query) |> data.table()
 }
 
-# =====================================================================
-# run sql query in athena
-# =====================================================================
-
-run_athena_select <- function(query,connection=con3) {
-  DBI::dbGetQuery(conn=connection,query)
-}
-
-run_athena_select("SELECT
-    source_file_name,
-    source_system,
-    account_label,
-    transaction_dt,
-    source_description,
-    description,
-    amount
-FROM finances.trans_export
-WHERE account_label = 'Wells Fargo Joint Checking'
-  AND transaction_dt = DATE '2026-04-16'
-  AND amount = DECIMAL '-10.58'
-  AND description LIKE '%TACO BELL%';
-                  ")
