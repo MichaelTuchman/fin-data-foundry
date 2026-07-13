@@ -1,0 +1,13 @@
+rule_id,rule_priority,active,source_system,account_id,account_type,description_match_type,description_pattern,amount_sign,transaction_type,transaction_subtype,rule_note
+PAYROLL_001,10,True,any,any,checking,regex,PAYROLL|DIRECT DEP|DIR DEP|SALARY,positive,deposit,payroll,Generic payroll/direct-deposit pattern; employer-specific payroll rules belong in a user overlay.
+CCPAY_001,20,True,any,any,checking,regex,CREDIT CARD|AUTOPAY|ONLINE PAYMENT|PAYMENT TO,negative,credit_card_payment,,Checking-account outflow to pay a credit card.
+CCPAY_002,20,True,any,any,credit_card,regex,PAYMENT|AUTOPAY|THANK YOU,any,credit_card_payment,,Credit-card payment text before purchase fallback.
+FINCHG_001,30,True,any,any,credit_card,regex,INTEREST|FINANCE CHARGE,any,finance_charge,,Finance charges may appear with either sign depending on source normalization.
+FEE_001,40,True,any,any,any,regex,FEE|SERVICE CHARGE|LATE FEE|RETURNED CHECK CHG|FOREIGN CURRENCY CONVERSION FEE,any,fee,,Fees can appear with either sign depending on account/source.
+BILLPAY_001,50,True,any,any,checking,regex,BILL PAY|ACHBILLPAY,negative,bill_payment,,Checking-account bill pay outflows.
+CHECK_001,55,True,any,any,checking,regex,^CHECK|CHECK #,negative,check,,Paper/electronic check outflows.
+TRANSFER_001,60,True,any,any,checking,regex,TRANSFER|XFER,negative,transfer,,Checking-account transfer outflows; positive transfers fall through to deposit/non_payroll.
+PURCH_001,90,True,any,any,credit_card,any,,negative,purchase,,"Credit-card negative fallback purchase rule after payment, finance charge, and fee rules."
+DEP_001,90,True,any,any,checking,any,,positive,deposit,non_payroll,Checking-account positive fallback after payroll rules.
+WD_001,95,True,any,any,checking,any,,negative,withdrawal,,"Checking-account negative fallback after bill pay, check, transfer, fee, and payment rules; preserved as a generic withdrawal rather than inferred as a purchase."
+UNK_001,999,True,any,any,any,any,,any,unknown,,Final catch-all; should be monitored and reduced over time.
