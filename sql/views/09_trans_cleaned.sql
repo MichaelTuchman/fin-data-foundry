@@ -11,6 +11,7 @@ WITH whitespace_normalized AS (
         file_start_dt,
         file_end_dt,
         layout_id,
+        amount_model,
         derived_row_serial,
         transaction_date,
         transaction_dt,
@@ -27,6 +28,12 @@ WITH whitespace_normalized AS (
             )
         ) AS description,
         amount,
+        amount_d_source,
+        debit_amount,
+        debit_amount_d,
+        credit_amount,
+        credit_amount_d,
+        amount_source_field,
         amount_d,
         check_number,
         status
@@ -34,110 +41,42 @@ WITH whitespace_normalized AS (
 ),
 purchase_authorized_removed AS (
     SELECT
-        source_file_path,
-        source_file_name,
-        source_system,
-        account_id,
-        account_label,
-        account_type,
-        institution,
-        file_start_dt,
-        file_end_dt,
-        layout_id,
-        derived_row_serial,
-        transaction_date,
-        transaction_dt,
-        source_description,
+        *,
         regexp_replace(
             description,
             '\bPURCHASE AUTHORIZED ON +[0-9]{1,2}/[0-9]{1,2} +',
             ''
-        ) AS description,
-        amount,
-        amount_d,
-        check_number,
-        status
+        ) AS next_description
     FROM whitespace_normalized
 ),
 recurring_payment_removed AS (
     SELECT
-        source_file_path,
-        source_file_name,
-        source_system,
-        account_id,
-        account_label,
-        account_type,
-        institution,
-        file_start_dt,
-        file_end_dt,
-        layout_id,
-        derived_row_serial,
-        transaction_date,
-        transaction_dt,
-        source_description,
+        *,
         regexp_replace(
-            description,
+            next_description,
             '\bRECURRING PAYMENT AUTHORIZED ON +[0-9]{1,2}/[0-9]{1,2} +',
             ''
-        ) AS description,
-        amount,
-        amount_d,
-        check_number,
-        status
+        ) AS next_description_2
     FROM purchase_authorized_removed
 ),
 legal_suffix_spaced AS (
     SELECT
-        source_file_path,
-        source_file_name,
-        source_system,
-        account_id,
-        account_label,
-        account_type,
-        institution,
-        file_start_dt,
-        file_end_dt,
-        layout_id,
-        derived_row_serial,
-        transaction_date,
-        transaction_dt,
-        source_description,
+        *,
         regexp_replace(
-            description,
+            next_description_2,
             '\b(LLC|INC|CORP|LTD|LP|LLP|PLLC|PC)([A-Z])',
             '$1 $2'
-        ) AS description,
-        amount,
-        amount_d,
-        check_number,
-        status
+        ) AS next_description_3
     FROM recurring_payment_removed
 ),
 punctuation_spaced AS (
     SELECT
-        source_file_path,
-        source_file_name,
-        source_system,
-        account_id,
-        account_label,
-        account_type,
-        institution,
-        file_start_dt,
-        file_end_dt,
-        layout_id,
-        derived_row_serial,
-        transaction_date,
-        transaction_dt,
-        source_description,
+        *,
         regexp_replace(
-            description,
+            next_description_3,
             '([!?,.;:])([A-Za-z])',
             '$1 $2'
-        ) AS description,
-        amount,
-        amount_d,
-        check_number,
-        status
+        ) AS next_description_4
     FROM legal_suffix_spaced
 )
 SELECT
@@ -151,18 +90,25 @@ SELECT
     file_start_dt,
     file_end_dt,
     layout_id,
+    amount_model,
     derived_row_serial,
     transaction_date,
     transaction_dt,
     source_description,
     trim(
         regexp_replace(
-            description,
+            next_description_4,
             ' {2,}',
             ' '
         )
     ) AS description,
     amount,
+    amount_d_source,
+    debit_amount,
+    debit_amount_d,
+    credit_amount,
+    credit_amount_d,
+    amount_source_field,
     amount_d,
     check_number,
     status

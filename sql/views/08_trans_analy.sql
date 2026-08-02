@@ -10,6 +10,7 @@ SELECT
     cw.file_start_dt,
     cw.file_end_dt,
     cw.layout_id,
+    cw.amount_model,
     cw.derived_row_serial,
     cw.transaction_date,
     CAST(
@@ -20,12 +21,13 @@ SELECT
     ) AS transaction_dt,
     cw.description,
     cw.amount,
-    cw.amount_d AS amount_d_raw,
-    CASE
-        WHEN ma.debit_sign_convention = 'positive' THEN cw.amount_d * -1
-        WHEN ma.debit_sign_convention = 'negative' THEN cw.amount_d
-        ELSE cw.amount_d
-    END AS amount_d,
+    cw.amount_d_source,
+    cw.debit_amount,
+    cw.debit_amount_d,
+    cw.credit_amount,
+    cw.credit_amount_d,
+    cw.amount_source_field,
+    cw.amount_d,
     cw.check_number,
     cw.status
 FROM canon_wide cw

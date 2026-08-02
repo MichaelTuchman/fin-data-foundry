@@ -1,32 +1,33 @@
 CREATE OR REPLACE VIEW canon_wide AS
 WITH wide AS (
     SELECT
-        source_file_path,
-        source_file_name,
-        source_system,
-        account_id,
-        file_start_dt,
-        file_end_dt,
-        layout_id,
-        derived_row_serial,
+        cl.source_file_path,
+        cl.source_file_name,
+        cl.source_system,
+        cl.account_id,
+        cl.file_start_dt,
+        cl.file_end_dt,
+        cl.layout_id,
+        lower(trim(mlc.amount_model)) AS amount_model,
+        cl.derived_row_serial,
         MAX(
             CASE
-                WHEN canonical_field = 'transaction_date'
-                THEN raw_value
+                WHEN cl.canonical_field = 'transaction_date'
+                THEN cl.raw_value
             END
         ) AS transaction_date,
         MAX(
             CASE
-                WHEN canonical_field = 'description'
-                THEN raw_value
+                WHEN cl.canonical_field = 'description'
+                THEN cl.raw_value
             END
         ) AS description,
         NULLIF(
             TRIM(
                 MAX(
                     CASE
-                        WHEN canonical_field = 'amount'
-                        THEN raw_value
+                        WHEN cl.canonical_field = 'amount'
+                        THEN cl.raw_value
                     END
                 )
             ),
@@ -36,8 +37,8 @@ WITH wide AS (
             TRIM(
                 MAX(
                     CASE
-                        WHEN canonical_field = 'debit_amount'
-                        THEN raw_value
+                        WHEN cl.canonical_field = 'debit_amount'
+                        THEN cl.raw_value
                     END
                 )
             ),
@@ -47,8 +48,8 @@ WITH wide AS (
             TRIM(
                 MAX(
                     CASE
-                        WHEN canonical_field = 'credit_amount'
-                        THEN raw_value
+                        WHEN cl.canonical_field = 'credit_amount'
+                        THEN cl.raw_value
                     END
                 )
             ),
@@ -56,26 +57,31 @@ WITH wide AS (
         ) AS credit_amount_value,
         MAX(
             CASE
-                WHEN canonical_field = 'check_number'
-                THEN raw_value
+                WHEN cl.canonical_field = 'check_number'
+                THEN cl.raw_value
             END
         ) AS check_number,
         MAX(
             CASE
-                WHEN canonical_field = 'status'
-                THEN raw_value
+                WHEN cl.canonical_field = 'status'
+                THEN cl.raw_value
             END
         ) AS status
-    FROM canon_long
+    FROM canon_long cl
+    INNER JOIN metadata_layout_controls mlc
+        ON cl.source_system = mlc.source_system
+       AND cl.account_id = mlc.account_id
+       AND cl.layout_id = mlc.layout_id
     GROUP BY
-        source_file_path,
-        source_file_name,
-        source_system,
-        account_id,
-        file_start_dt,
-        file_end_dt,
-        layout_id,
-        derived_row_serial
+        cl.source_file_path,
+        cl.source_file_name,
+        cl.source_system,
+        cl.account_id,
+        cl.file_start_dt,
+        cl.file_end_dt,
+        cl.layout_id,
+        lower(trim(mlc.amount_model)),
+        cl.derived_row_serial
 ),
 parsed AS (
     SELECT
@@ -86,6 +92,7 @@ parsed AS (
         file_start_dt,
         file_end_dt,
         layout_id,
+        amount_model,
         derived_row_serial,
         transaction_date,
         description,
@@ -152,22 +159,38 @@ SELECT
     file_start_dt,
     file_end_dt,
     layout_id,
+    amount_model,
     derived_row_serial,
     transaction_date,
     description,
-    COALESCE(
-        amount_value,
-        debit_amount_value,
-        credit_amount_value
-    ) AS amount,
+    amount_value AS amount,
+    parsed_amount AS amount_d_source,
+    debit_amount_value AS debit_amount,
+    parsed_debit_amount AS debit_amount_d,
+    credit_amount_value AS credit_amount,
+    parsed_credit_amount AS credit_amount_d,
+    CASE
+        WHEN amount_value IS NOT NULL THEN 'amount'
+        WHEN credit_amount_value IS NOT NULL THEN 'credit_amount'
+        WHEN debit_amount_value IS NOT NULL THEN 'debit_amount'
+        ELSE NULL
+    END AS amount_source_field,
     CAST(
-        CASE
-            WHEN parsed_amount IS NOT NULL
+        CASE amount_model
+            WHEN 'single_signed'
                 THEN parsed_amount
-            WHEN parsed_debit_amount IS NOT NULL
-              OR parsed_credit_amount IS NOT NULL
-                THEN COALESCE(parsed_debit_amount, DECIMAL '0.00')
-                   - COALESCE(parsed_credit_amount, DECIMAL '0.00')
+            WHEN 'single_debit_positive'
+                THEN parsed_amount * -1
+            WHEN 'split_signed'
+                THEN COALESCE(parsed_credit_amount, parsed_debit_amount)
+            WHEN 'split_unsigned'
+                THEN CASE
+                    WHEN parsed_credit_amount IS NOT NULL
+                        THEN ABS(parsed_credit_amount)
+                    WHEN parsed_debit_amount IS NOT NULL
+                        THEN ABS(parsed_debit_amount) * -1
+                    ELSE NULL
+                END
             ELSE NULL
         END
         AS DECIMAL(18,2)
