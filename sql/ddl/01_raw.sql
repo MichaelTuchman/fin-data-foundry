@@ -16,4 +16,4 @@ WITH SERDEPROPERTIES (
     'quoteChar' = '"'
 )
 STORED AS TEXTFILE
-LOCATION 's3://mftfinances/raw/';
+LOCATION 's3://your_bucket_root/raw/';

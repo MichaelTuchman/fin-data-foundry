@@ -1,0 +1,44 @@
+version: 1
+accounts:
+- source_system: bhg
+  account_id: mc
+  account_label: BHG Mastercard
+  account_type: credit_card
+  institution: BHG
+  currency: USD
+  debit_sign_convention: positive
+- source_system: jtb
+  account_id: mc
+  account_label: Jet Blue Mastercard
+  account_type: credit_card
+  institution: Barclays Bank US
+  currency: USD
+  debit_sign_convention: negative
+- source_system: wf
+  account_id: jc
+  account_label: Wells Fargo Joint Checking
+  account_type: checking
+  institution: Wells Fargo
+  currency: USD
+  debit_sign_convention: negative
+- source_system: amex
+  account_id: gold
+  account_label: American Express Gold Card
+  account_type: credit_card
+  institution: American Express
+  currency: USD
+  debit_sign_convention: positive
+- source_system: amex
+  account_id: hilton
+  account_label: American Express Hilton
+  account_type: credit_card
+  institution: American Express
+  currency: USD
+  debit_sign_convention: positive
+- source_system: fulton
+  account_id: checking
+  account_label: Fulton Checking
+  account_type: checking
+  institution: Fulton Bank
+  currency: USD
+  debit_sign_convention: negative

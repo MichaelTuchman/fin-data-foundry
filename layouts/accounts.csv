@@ -1,3 +1,0 @@
-source_system,account_id,account_label,account_type,institution,asset_liab
-wf,checking,Wells Fargo Checking,checking,Wells Fargo,asset
-bhg,mastercard,BHG Mastercard,credit_card,BHG,liability

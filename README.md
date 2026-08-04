@@ -1,113 +1,246 @@
-# fin-data-foundry
+# Finance Foundry
 
-Metadata-driven framework for **normalizing inconsistent bank CSV data into a unified transaction model**.
+A metadata-driven framework for harmonizing financial transaction data across multiple institutions and over time.
 
-Most banks export transaction data differently—and often change formats over time.  
-As a result, combining or analyzing data across accounts becomes manual, fragile, and time-consuming.
+Financial data is difficult because inconsistency exists in two dimensions:
 
-**fin-data-foundry** solves this by separating *data ingestion* from *data interpretation*.  
-Raw CSV files are ingested as-is, and metadata defines how each format should be transformed into a standardized schema.
+- Different institutions export data in different formats.
+- The same institution changes formats over time.
 
-The name *foundry* is intentional:
+As a result, combining transaction data across accounts often becomes a manual, fragile, and difficult-to-audit process.
+
+Finance Foundry addresses this problem by separating **data ingestion** from **data interpretation**.
+
+Raw files are preserved as-is. Metadata defines how those files should be interpreted and transformed into a canonical transaction model.
+
+The name *Foundry* is intentional:
 
 > A foundry transforms raw, unrefined material into consistent, usable forms.
 
-This system applies the same idea to financial data—casting heterogeneous inputs into a single, queryable transaction dataset.
-
-It enables normalization of bank CSV data, standardization of financial transactions, and metadata-driven ingestion using SQL and AWS Athena.
-
-This approach moves beyond traditional data pipelines. By using metadata to define structure, the system acts as an early form of **assisted data modeling**—helping transform inconsistent inputs into a consistent, queryable schema with minimal manual effort.
+Finance Foundry applies the same principle to financial data, transforming heterogeneous transaction exports into a unified, queryable dataset.
 
 ---
 
-## ⚠️ Current Implementation
+## Why this exists
 
-The reference implementation in this repository is developed and tested on AWS (S3 + Athena).
+Many financial data projects eventually run into the same questions:
 
-The overall approach is platform-agnostic and can be adapted to other environments (e.g., Azure, GCP, or local SQL engines), but those implementations are not yet provided.
+> Why don't my numbers match?
 
----
+> Why did my rows disappear?
 
-# 🧩 Use Cases
+> Which transformation changed this value?
 
-This project is designed for anyone dealing with inconsistent financial data across multiple sources.  Even within the same bank, formats often change over time.
+Traditional pipelines often focus *merely* on producing outputs.
 
-## 🏦 Personal Finance Aggregation
+Finance Foundry focuses on producing outputs that remain _explainable_.
 
-Combine transaction exports from multiple banks into a single dataset:
-
-- Wells Fargo, Chase, Amex, etc.
-- Different formats, column orders, and naming conventions
-- Output: one consistent transaction table for analysis
+The goal is not simply to **transform data**, but to make every change traceable, observable, and reproducible.
 
 ---
 
-## 📊 Financial Analysis & Reporting
+## Core Principles
 
-Prepare clean, structured data for:
+### Preserve Raw Data
+
+Raw source files are never rewritten.
+
+Interpretation occurs through metadata rather than modification of source data.
+
+### Separate Structure from Meaning
+
+The system separates:
+
+- file ingestion
+- layout identification
+- schema interpretation
+- analysis-ready modeling
+
+This allows formats to evolve without requiring new code paths for every source.
+
+### Make Failure Visible
+
+Transformation failures should be observable and diagnosable.
+
+The system is designed to answer questions such as:
+
+> Where did my rows go?
+
+> Which layout was selected?
+
+> Why was this file interpreted this way?
+
+### Preserve Row Identity
+
+Rows should not silently disappear during transformation.
+
+Row preservation is treated as a first-class invariant throughout the pipeline.
+
+---
+
+## Architecture
+
+The reference implementation uses a staged transformation model:
+
+```text
+raw
+    ↓
+canonical
+    ↓
+analysis
+    ↓
+lexical cleanup
+    ↓
+typing
+    ↓
+semantic normalization
+    ↓
+export
+```
+
+### raw_boundary
+
+Identifies source files and preserves file-level context.
+
+### file_context
+
+Derives:
+
+- source system
+- account identity
+- file coverage period
+
+from file structure and naming conventions.
+
+### layout_match
+
+Determines which layout definition applies to a file based on metadata and effective date ranges.
+
+### canon_long
+
+Normalizes heterogeneous source columns into a metadata-driven canonical representation.
+
+### canon_wide
+
+Transforms canonical records into analysis-ready transaction structures.
+
+### trans_analy
+
+Final typed dataset for downstream analysis and reporting.
+
+### trans_cleaned
+
+Applies deterministic lexical cleaning to transaction descriptions while preserving the original bank-supplied text in `source_description`. This stage performs only non-semantic normalization, such as whitespace cleanup and removal of known boilerplate.
+
+### trans_typed
+
+Classifies transactions using metadata-driven transaction type rules. This stage adds transaction type metadata while preserving all columns produced by `trans_cleaned`.
+
+### trans_normalized
+
+Performs semantic normalization after transaction typing. This stage may simplify descriptions, remove transaction-type-specific boilerplate, or apply other semantic transformations while preserving the original and cleaned descriptions.
+
+### trans_export
+
+Provides a stable, user-facing dataset suitable for reporting, visualization, download, and downstream analytics. This view represents the recommended interface for most consumers of Finance Foundry.
+
+
+---
+
+## Use Cases
+
+### Personal Finance Aggregation
+
+Combine exports from multiple institutions into a single transaction dataset.
+
+Examples:
+
+- Wells Fargo
+- Chase
+- American Express
+- Credit card exports
+- Brokerage exports
+
+### Financial Analysis and Reporting
+
+Prepare data for:
 
 - spending analysis
-- budgeting tools
-- dashboards (Athena, BI tools, etc.)
+- budgeting
+- cash flow reporting
+- dashboards
+- business intelligence tools
 
-Instead of manually cleaning each CSV, define the structure once in metadata.
+### Schema-on-Read Data Engineering
 
----
+Handle evolving file formats without rewriting ingestion logic.
 
-## ⚙️ Data Engineering (Schema-on-Read)
+Supports:
 
-Handle multiple CSV formats without rewriting pipelines:
+- multiple layouts per source
+- layout evolution over time
+- metadata-driven interpretation
 
-- Different layouts over time
-- Multiple schemas in a single directory
-- No per-source ETL logic
+### Fintech Prototyping
 
-This is especially useful for:
-- AWS Athena / Presto / Trino workflows
-- Data lakes with evolving schemas
+Build aggregation and analytics prototypes without requiring institution-specific APIs.
 
----
+### Historical Financial Archives
 
-## 🏗️ Fintech Prototyping
-
-Build financial products without relying on APIs:
-
-- Ingest exported bank data instead of API integrations
-- Normalize into a common schema
-- Prototype aggregation and analytics features quickly
+Maintain long-term collections of financial exports while preserving the ability to interpret older formats correctly.
 
 ---
 
-## 🔁 Evolving Data Formats
+## Design Influences
 
-Banks frequently change their export formats.
+Finance Foundry is heavily influenced by ideas from:
 
-This system:
-- supports multiple layouts per source
-- uses effective dates to apply the correct schema
-- avoids breaking existing pipelines
+- Clinical programming
+- Actuarial systems design
+
+Both disciplines operate in environments where correctness, traceability, and reproducibility are critical.
+
+Many design decisions in this project—including explicit transformation stages, row preservation checks, metadata-driven interpretation, and observability of failures—derive from those traditions.
+
+Additional discussion can be found in:
+
+- `docs/philosophy/inspiration.md`
 
 ---
-## 🔮 Future Directions
 
-This framework focuses on standardizing raw financial transaction data.
+## Current Implementation
 
-A natural extension is higher-level interpretation, such as:
+The reference implementation is built using:
+
+- AWS S3
+- AWS Athena
+- Metadata-driven SQL transformations
+
+The architecture itself is platform-agnostic and can be adapted to other environments.
+
+---
+
+## Documentation
+
+Additional documentation is available under:
+
+- `docs/architecture/`
+- `docs/governance/`
+- `docs/philosophy/`
+
+See `docs/README.md` for a complete documentation index.
+
+---
+
+## Future Directions
+
+Potential future enhancements include:
 
 - merchant identification
 - transaction categorization
-- enrichment of normalized data
+- enrichment layers
+- cross-account reconciliation
+- automated layout discovery
+- layout workbench tooling
 
-Early prototypes of these capabilities exist, but are not yet part of this repository.
-
-# 📚 Documentation
-
-Detailed setup, architecture, and usage instructions are available in the project Wiki (ready 5/12/26)
-
-👉 [Project Wiki](../../wiki)
-
-Hardcoded S3 bucket names currently exist.
-This is known and accepted.
-
----
-
+The current focus remains on reliable harmonization and traceable transformation of raw financial transaction data.

@@ -1,0 +1,10 @@
+.Rproj.user
+.Rhistory
+.RData
+.Ruserdata
+catclip
+.csv
+.CSV
+
+# Generated metadata artifacts — built from metadata/source/*.yml, not versioned
+metadata/generated/
